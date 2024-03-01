@@ -1,0 +1,23 @@
+[package]
+name = "ntex-restful-api-server"
+description = "A demo app for ntex restful api server."
+authors = ["Elton Zheng <elton.zheng@me.com>"]
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures = "0.3"
+ntex = { version = "1.1", features = ["tokio", "compress"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"
+env_logger = "0.11"
+log = "0.4"
+derive_more = "0.99"
+dotenv = "0.15"
+
+diesel = { version = "2.1", features = ["postgres", "r2d2", "chrono"] }
+r2d2 = "0.8"
+r2d2_postgres = "0.18"
+chrono = { version = "0.4", features = ["serde"] }
