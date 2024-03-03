@@ -47,7 +47,7 @@ pub fn get_user_by_id(
     users
         .filter(id.eq(user_id).and(deleted_at.is_null()))
         .select(User::as_select())
-        .first(conn)
+        .first::<User>(conn)
         .optional()
 }
 

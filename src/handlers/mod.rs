@@ -14,7 +14,16 @@ pub struct Response<T> {
 async fn health() -> Result<web::HttpResponse, Error> {
     Ok(web::HttpResponse::Ok().json(&Response::<()> {
         status: "success".to_string(),
-        message: "Server is running".to_string(),
+        message: "Server is running...".to_string(),
+        data: None,
+    }))
+}
+
+// not found handler
+async fn not_found_error() -> Result<web::HttpResponse, Error> {
+    Ok(web::HttpResponse::NotFound().json(&Response::<()> {
+        status: "error".to_string(),
+        message: "Not Found".to_string(),
         data: None,
     }))
 }
@@ -29,6 +38,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
             .service(user::get_all_users)
             .service(user::update_user_by_id)
             .service(user::get_users_by_name)
-            .service(user::delete_user_by_id),
+            .service(user::delete_user_by_id)
+            .default_service(web::route().to(not_found_error)),
     );
 }
