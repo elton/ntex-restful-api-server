@@ -26,7 +26,7 @@ async fn main() -> std::io::Result<()> {
             // enable Compression, A response's Content-Encoding header defaults to ContentEncoding::Auto, which performs automatic content compression negotiation based on the request's Accept-Encoding header.
             // should add "compress" feature to the Cargo.toml
             .wrap(web::middleware::Compress::default())
-            .configure(handlers::routes::config)
+            .configure(handlers::config)
     })
     .bind(("127.0.0.1", 8080))?
     .run()

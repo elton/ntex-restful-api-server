@@ -1,4 +1,3 @@
-use ::r2d2::PooledConnection;
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use dotenv::dotenv;
