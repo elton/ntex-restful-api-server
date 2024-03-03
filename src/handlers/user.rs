@@ -24,7 +24,7 @@ async fn create_user(
         web::Error::from(e)
     })?;
 
-    Ok(web::HttpResponse::Ok().json(&Response::<&User> {
+    Ok(web::HttpResponse::Created().json(&Response::<&User> {
         status: "success".to_string(),
         message: format!(
             "User `{}` with id `{}` created successfully",

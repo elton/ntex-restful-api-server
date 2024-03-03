@@ -45,8 +45,7 @@ pub fn get_user_by_id(
     use crate::models::schema::users::dsl::*;
 
     users
-        .filter(deleted_at.is_null())
-        .find(user_id)
+        .filter(id.eq(user_id).and(deleted_at.is_null()))
         .select(User::as_select())
         .first(conn)
         .optional()
