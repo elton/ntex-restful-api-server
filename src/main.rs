@@ -1,4 +1,5 @@
-use ntex::web;
+use ntex::{http, web};
+use ntex_cors::Cors;
 
 pub mod handlers;
 pub mod models;
@@ -17,6 +18,10 @@ async fn main() -> std::io::Result<()> {
         let logger = web::middleware::Logger::default();
 
         web::App::new()
+            .wrap(
+                Cors::new() // <- Construct CORS middleware builder
+                    .finish(),
+            )
             // set up DB pool to be used with web::State<Pool> extractor
             .state(pool.clone())
             // enable logger

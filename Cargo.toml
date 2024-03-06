@@ -21,3 +21,4 @@ diesel = { version = "2.1", features = ["postgres", "r2d2", "chrono"] }
 r2d2 = "0.8"
 r2d2_postgres = "0.18"
 chrono = { version = "0.4", features = ["serde"] }
+ntex-cors = "1.0.0"

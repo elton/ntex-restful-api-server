@@ -862,6 +862,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ntex-cors"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33923472f6c4966b86fe07ab82b3ebb5d0b35102c10346f337ddd5d753a5f156"
+dependencies = [
+ "derive_more",
+ "futures",
+ "ntex",
+]
+
+[[package]]
 name = "ntex-h2"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -935,6 +946,7 @@ dependencies = [
  "futures",
  "log",
  "ntex",
+ "ntex-cors",
  "r2d2",
  "r2d2_postgres",
  "serde",
