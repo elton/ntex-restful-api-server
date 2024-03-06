@@ -17,14 +17,18 @@ pub struct User {
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub deleted_at: Option<chrono::NaiveDateTime>,
+    pub email: String,
+    pub avatar: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Insertable, AsChangeset)]
 #[diesel(table_name = crate::models::schema::users)]
 pub struct NewUser {
-    pub name: String,
+    pub name: Option<String>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub deleted_at: Option<chrono::NaiveDateTime>,
+    pub email: Option<String>,
+    pub avatar: Option<String>,
 }
 
 // create a new user

@@ -14,8 +14,7 @@ async fn create_user(
 ) -> Result<web::HttpResponse, web::Error> {
     let mut conn = pool.get().expect("couldn't get db connection from pool");
     let new_user = web::block(move || {
-        // Obtaining a connection from the pool is also a potentially blocking operation.
-        // So, it should be called within the `web::block` closure, as well.
+        // Obtaining a connection from the pool is also a potentially blocking operation. So, it should be called within the `web::block` closure, as well.
         user::create_user(&mut conn, user.into_inner())
     })
     .await
