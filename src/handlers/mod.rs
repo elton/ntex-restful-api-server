@@ -6,6 +6,7 @@ pub mod user;
 pub struct Response<T> {
     pub status: String,
     pub message: String,
+    pub count: Option<i64>,
     pub data: Option<T>,
 }
 
@@ -15,6 +16,7 @@ async fn health() -> Result<web::HttpResponse, Error> {
     Ok(web::HttpResponse::Ok().json(&Response::<()> {
         status: "success".to_string(),
         message: "Server is running...".to_string(),
+        count: None,
         data: None,
     }))
 }
@@ -24,6 +26,7 @@ async fn not_found_error() -> Result<web::HttpResponse, Error> {
     Ok(web::HttpResponse::NotFound().json(&Response::<()> {
         status: "error".to_string(),
         message: "Not Found".to_string(),
+        count: None,
         data: None,
     }))
 }

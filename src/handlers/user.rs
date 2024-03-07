@@ -29,6 +29,7 @@ async fn create_user(
             "User `{}` with id `{}` created successfully",
             new_user.name, new_user.id
         ),
+        count: None,
         data: Some(&new_user),
     }))
 }
@@ -51,11 +52,13 @@ async fn get_user_by_id(
         Some(user) => Ok(web::HttpResponse::Ok().json(&Response::<&User> {
             status: "success".to_string(),
             message: "User found".to_string(),
+            count: None,
             data: Some(&user),
         })),
         None => Ok(web::HttpResponse::NotFound().json(&Response::<()> {
             status: "success".to_string(),
             message: "User not found".to_string(),
+            count: None,
             data: None,
         })),
     }
@@ -78,6 +81,7 @@ async fn get_users_by_name(
     Ok(web::HttpResponse::Ok().json(&Response::<Vec<User>> {
         status: "success".to_string(),
         message: "Users found".to_string(),
+        count: None,
         data: Some(users),
     }))
 }
@@ -89,7 +93,7 @@ async fn search_users(
     query: web::types::Json<SearchQuery>,
 ) -> Result<web::HttpResponse, Error> {
     let mut conn = pool.get().expect("couldn't get db connection from pool");
-    let users = web::block(move || {
+    let (users, count) = web::block(move || {
         user::search_users(
             &mut conn,
             &query.search_term,
@@ -108,19 +112,17 @@ async fn search_users(
     // map_or_else 第一个闭包参数是没有元素时的处理，第二个闭包参数是有元素时的处理
     let message = users.iter().next().map_or_else(
         || "No user found".to_string(),
-        |_| {
-            let count = users.len();
-            match count {
-                0 => "No users found".to_string(),
-                1 => "1 user found".to_string(),
-                _ => format!("{} users found", count),
-            }
+        |_| match count {
+            0 => "No users found".to_string(),
+            1 => "1 user found".to_string(),
+            _ => format!("{} users found", count),
         },
     );
 
     Ok(web::HttpResponse::Ok().json(&Response::<Vec<User>> {
         status: "success".to_string(),
         message,
+        count: Some(count),
         data: Some(users),
     }))
 }
@@ -141,6 +143,7 @@ async fn get_all_users(
     Ok(web::HttpResponse::Ok().json(&Response::<Vec<User>> {
         status: "success".to_string(),
         message: "Users found".to_string(),
+        count: Some(users.len() as i64),
         data: Some(users),
     }))
 }
@@ -168,6 +171,7 @@ async fn update_user_by_id(
             "User `{}` with id `{}` updated successfully",
             updated_user.name, updated_user.id
         ),
+        count: None,
         data: Some(&updated_user),
     }))
 }
@@ -192,6 +196,7 @@ async fn delete_user_by_id(
             "User `{}` with id `{}` deleted successfully",
             deleted_user.name, deleted_user.id
         ),
+        count: None,
         data: Some(&deleted_user),
     }))
 }

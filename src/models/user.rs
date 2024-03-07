@@ -90,15 +90,15 @@ pub fn search_users(
     order_by: &str,
     page: i64,
     page_size: i64,
-) -> diesel::QueryResult<Vec<User>> {
+) -> diesel::QueryResult<(Vec<User>, i64)> {
     use crate::models::schema::users::dsl::*;
 
     let offset = (page - 1) * page_size;
 
-    users
+    let user_list = users
         .filter(
-            name.ilike(&format!("%{}%", search_term))
-                .or(email.ilike(&format!("%{}%", search_term)))
+            name.ilike(&format!("%{}%", &search_term))
+                .or(email.ilike(&format!("%{}%", &search_term)))
                 .and(deleted_at.is_null()),
         )
         .select(User::as_select())
@@ -108,7 +108,17 @@ pub fn search_users(
         )))
         .offset(offset)
         .limit(page_size)
-        .load(conn)
+        .load(conn)?;
+
+    let total_count = users
+        .filter(
+            name.ilike(&format!("%{}%", &search_term))
+                .or(email.ilike(&format!("%{}%", &search_term)))
+                .and(deleted_at.is_null()),
+        )
+        .count()
+        .get_result(conn)?;
+    Ok((user_list, total_count))
 }
 
 // get all users
