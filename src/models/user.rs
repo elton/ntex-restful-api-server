@@ -14,21 +14,31 @@ use serde::{Deserialize, Serialize};
 pub struct User {
     pub id: i32,
     pub name: String,
+    pub email: String,
+    pub avatar: Option<String>,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub deleted_at: Option<chrono::NaiveDateTime>,
-    pub email: String,
-    pub avatar: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Insertable, AsChangeset)]
 #[diesel(table_name = crate::models::schema::users)]
 pub struct NewUser {
     pub name: Option<String>,
-    pub modified_at: Option<chrono::NaiveDateTime>,
-    pub deleted_at: Option<chrono::NaiveDateTime>,
     pub email: Option<String>,
     pub avatar: Option<String>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+    pub deleted_at: Option<chrono::NaiveDateTime>,
+}
+
+// search query
+#[derive(Queryable, Deserialize, Serialize, Debug, Clone)]
+pub struct SearchQuery {
+    pub search_term: String,
+    pub sort_by: String,
+    pub order_by: String,
+    pub page: i64,
+    pub page_size: i64,
 }
 
 // create a new user
@@ -69,6 +79,35 @@ pub fn get_users_by_name(
         )
         .select(User::as_select())
         .order_by(created_at.desc())
+        .load(conn)
+}
+
+// search users by name or email with pagination and sorting
+pub fn search_users(
+    conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
+    search_term: &str,
+    sort_by: &str,
+    order_by: &str,
+    page: i64,
+    page_size: i64,
+) -> diesel::QueryResult<Vec<User>> {
+    use crate::models::schema::users::dsl::*;
+
+    let offset = (page - 1) * page_size;
+
+    users
+        .filter(
+            name.ilike(&format!("%{}%", search_term))
+                .or(email.ilike(&format!("%{}%", search_term)))
+                .and(deleted_at.is_null()),
+        )
+        .select(User::as_select())
+        .order_by(diesel::dsl::sql::<diesel::sql_types::Text>(&format!(
+            "{} {}",
+            sort_by, order_by
+        )))
+        .offset(offset)
+        .limit(page_size)
         .load(conn)
 }
 

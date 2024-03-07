@@ -1,4 +1,4 @@
-use ntex::{http, web};
+use ntex::web;
 use ntex_cors::Cors;
 
 pub mod handlers;

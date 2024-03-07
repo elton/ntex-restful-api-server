@@ -39,6 +39,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
             .service(user::update_user_by_id)
             .service(user::get_users_by_name)
             .service(user::delete_user_by_id)
+            .service(user::search_users)
             .default_service(web::route().to(not_found_error)),
     );
 }

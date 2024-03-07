@@ -2,7 +2,7 @@ use ntex::web::{self, Error};
 
 use crate::{
     handlers::Response,
-    models::user::{self, NewUser, User},
+    models::user::{self, NewUser, SearchQuery, User},
     repository::database,
 };
 
@@ -78,6 +78,49 @@ async fn get_users_by_name(
     Ok(web::HttpResponse::Ok().json(&Response::<Vec<User>> {
         status: "success".to_string(),
         message: "Users found".to_string(),
+        data: Some(users),
+    }))
+}
+
+// search users by name or email with pagination and sorting
+#[web::post("/users/search")]
+async fn search_users(
+    pool: web::types::State<database::DbPool>,
+    query: web::types::Json<SearchQuery>,
+) -> Result<web::HttpResponse, Error> {
+    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let users = web::block(move || {
+        user::search_users(
+            &mut conn,
+            &query.search_term,
+            &query.sort_by,
+            &query.order_by,
+            query.page,
+            query.page_size,
+        )
+    })
+    .await
+    .map_err(|e| {
+        log::error!("Failed to search users: {:?}", e);
+        web::Error::from(e)
+    })?;
+
+    // map_or_else 第一个闭包参数是没有元素时的处理，第二个闭包参数是有元素时的处理
+    let message = users.iter().next().map_or_else(
+        || "No user found".to_string(),
+        |_| {
+            let count = users.len();
+            match count {
+                0 => "No users found".to_string(),
+                1 => "1 user found".to_string(),
+                _ => format!("{} users found", count),
+            }
+        },
+    );
+
+    Ok(web::HttpResponse::Ok().json(&Response::<Vec<User>> {
+        status: "success".to_string(),
+        message,
         data: Some(users),
     }))
 }
