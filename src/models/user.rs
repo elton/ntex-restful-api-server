@@ -1,8 +1,43 @@
 use ::r2d2::PooledConnection;
+use diesel::deserialize::{self, FromSql};
+use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
+use diesel::serialize::{self, IsNull, Output, ToSql};
+use diesel::sql_types::VarChar;
+use diesel::*;
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 
+#[derive(Debug, PartialEq, FromSqlRow, AsExpression, Eq, Clone, Serialize, Deserialize)]
+#[sql_type = "diesel::sql_types::VarChar"]
+#[serde(rename_all = "lowercase")]
+// 定义Role枚举
+pub enum Role {
+    Admin,
+    User,
+}
+
+// Implement the ToSql and FromSql traits for the Role enum
+impl ToSql<VarChar, Pg> for Role {
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> serialize::Result {
+        match *self {
+            Role::Admin => out.write_all(b"admin")?,
+            Role::User => out.write_all(b"user")?,
+        }
+        Ok(IsNull::No)
+    }
+}
+
+impl FromSql<VarChar, Pg> for Role {
+    fn from_sql(bytes: PgValue<'_>) -> deserialize::Result<Self> {
+        match bytes.as_bytes() {
+            b"admin" => Ok(Role::Admin),
+            b"user" => Ok(Role::User),
+            _ => Err("Unrecognized enum variant".into()),
+        }
+    }
+}
 // Queryable will generate all of the code needed to load a Post struct from a SQL query.
 // Selectable will generate code to construct a matching select clause based on your model type based on the table defined via the #[diesel(table_name = "your_table_name")] attribute.
 #[derive(Queryable, Selectable, Serialize, Deserialize, Debug, Clone)]
@@ -11,11 +46,14 @@ use serde::{Deserialize, Serialize};
 #[diesel(check_for_backend(diesel::pg::Pg))]
 // the order of the fields in the struct must match the order of the columns in the table.
 // [derive(Selectable)] + #[diesel(check_for_backend(YourBackendType))] to check for mismatching fields at compile time. This drastically improves the quality of the generated error messages by pointing to concrete type mismatches at field level.You need to specify the concrete database backend this specific struct is indented to be used with, as otherwise rustc cannot correctly identify the required deserialization implementation.
+
 pub struct User {
     pub id: i32,
     pub name: String,
     pub email: String,
     pub avatar: Option<String>,
+    pub role: Role,
+    pub password: String,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub deleted_at: Option<chrono::NaiveDateTime>,
@@ -27,6 +65,8 @@ pub struct NewUser {
     pub name: Option<String>,
     pub email: Option<String>,
     pub avatar: Option<String>,
+    pub role: Role,
+    pub password: String,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub deleted_at: Option<chrono::NaiveDateTime>,
 }
