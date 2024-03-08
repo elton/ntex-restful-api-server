@@ -9,8 +9,10 @@ use diesel::*;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
+use bcrypt::{hash, verify, DEFAULT_COST};
+
 #[derive(Debug, PartialEq, FromSqlRow, AsExpression, Eq, Clone, Serialize, Deserialize)]
-#[sql_type = "diesel::sql_types::VarChar"]
+#[diesel(sql_type = diesel::sql_types::VarChar)]
 #[serde(rename_all = "lowercase")]
 // 定义Role枚举
 pub enum Role {
@@ -20,7 +22,7 @@ pub enum Role {
 
 // Implement the ToSql and FromSql traits for the Role enum
 impl ToSql<VarChar, Pg> for Role {
-    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> serialize::Result {
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
         match *self {
             Role::Admin => out.write_all(b"admin")?,
             Role::User => out.write_all(b"user")?,
@@ -71,6 +73,13 @@ pub struct NewUser {
     pub deleted_at: Option<chrono::NaiveDateTime>,
 }
 
+// user login
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct UserLogin {
+    pub email: String,
+    pub password: String,
+}
+
 // search query
 #[derive(Queryable, Deserialize, Serialize, Debug, Clone)]
 pub struct SearchQuery {
@@ -82,13 +91,45 @@ pub struct SearchQuery {
 }
 
 // create a new user
-pub fn create_user<'a>(
+pub fn create_user(
     conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
     user: NewUser,
 ) -> diesel::QueryResult<User> {
     use crate::models::schema::users::dsl::*;
 
+    let hashed_password = hash(&user.password, DEFAULT_COST).unwrap();
+    let user = NewUser {
+        password: hashed_password,
+        ..user
+    };
+
     diesel::insert_into(users).values(&user).get_result(conn)
+}
+
+// verify a user by email and password
+pub fn verify_user(
+    conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
+    email_add: &str,
+    pwd: &str,
+) -> diesel::QueryResult<Option<User>> {
+    use crate::models::schema::users::dsl::*;
+
+    let user = users
+        .filter(email.eq(email_add).and(deleted_at.is_null()))
+        .select(User::as_select())
+        .first::<User>(conn)
+        .optional()?;
+
+    match user {
+        Some(user) => {
+            if verify::<&str>(pwd, &user.password).unwrap() {
+                Ok(Some(user))
+            } else {
+                Ok(None)
+            }
+        }
+        None => Ok(None),
+    }
 }
 
 // get a user by id
@@ -201,4 +242,11 @@ pub fn delete_user_by_id(
     diesel::update(users.find(user_id))
         .set(deleted_at.eq(now))
         .get_result(conn)
+}
+
+#[test]
+fn test_verify_user() {
+    let pwd = "123";
+    let hashed_pwd = hash(pwd, DEFAULT_COST).unwrap();
+    assert!(verify(pwd, &hashed_pwd).unwrap());
 }

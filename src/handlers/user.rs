@@ -2,7 +2,7 @@ use ntex::web::{self, Error};
 
 use crate::{
     handlers::Response,
-    models::user::{self, NewUser, SearchQuery, User},
+    models::user::{self, NewUser, SearchQuery, User, UserLogin},
     repository::database,
 };
 
@@ -32,6 +32,36 @@ async fn create_user(
         count: None,
         data: Some(&new_user),
     }))
+}
+
+// user login with email and password
+#[web::post("/user/login")]
+async fn user_login(
+    pool: web::types::State<database::DbPool>,
+    user: web::types::Json<UserLogin>,
+) -> Result<web::HttpResponse, web::Error> {
+    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let user = web::block(move || user::verify_user(&mut conn, &user.email, &user.password))
+        .await
+        .map_err(|e| {
+            log::error!("Failed to verify user: {:?}", e);
+            web::Error::from(e)
+        })?;
+
+    match user {
+        Some(user) => Ok(web::HttpResponse::Ok().json(&Response::<&User> {
+            status: "success".to_string(),
+            message: "User verified".to_string(),
+            count: None,
+            data: Some(&user),
+        })),
+        None => Ok(web::HttpResponse::Unauthorized().json(&Response::<()> {
+            status: "failed".to_string(),
+            message: "User not verified".to_string(),
+            count: None,
+            data: None,
+        })),
+    }
 }
 
 // get a user by id
