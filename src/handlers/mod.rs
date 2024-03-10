@@ -38,11 +38,11 @@ pub fn config(cfg: &mut web::ServiceConfig) {
             .service(health)
             .service(user::create_user)
             .service(user::get_user_by_id)
+            .service(user::get_users_by_name)
+            .service(user::search_users)
             .service(user::get_all_users)
             .service(user::update_user_by_id)
-            .service(user::get_users_by_name)
             .service(user::delete_user_by_id)
-            .service(user::search_users)
             .service(user::user_login)
             .default_service(web::route().to(not_found_error)),
     );

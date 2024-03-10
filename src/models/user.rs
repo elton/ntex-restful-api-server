@@ -11,7 +11,7 @@ use std::io::Write;
 
 use bcrypt::{hash, verify, DEFAULT_COST};
 
-#[derive(Debug, PartialEq, FromSqlRow, AsExpression, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, FromSqlRow, AsExpression, Eq, Clone, Serialize, Deserialize, Copy)]
 #[diesel(sql_type = diesel::sql_types::VarChar)]
 #[serde(rename_all = "lowercase")]
 // 定义Role枚举
@@ -65,7 +65,7 @@ pub struct User {
 #[diesel(table_name = crate::models::schema::users)]
 pub struct NewUser {
     pub name: Option<String>,
-    pub email: Option<String>,
+    pub email: String,
     pub avatar: Option<String>,
     pub role: Role,
     pub password: String,
@@ -88,6 +88,20 @@ pub struct SearchQuery {
     pub order_by: String,
     pub page: i64,
     pub page_size: i64,
+}
+
+// get a user by email
+pub fn get_user_by_email(
+    conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
+    email_add: &str,
+) -> diesel::QueryResult<Option<User>> {
+    use crate::models::schema::users::dsl::*;
+
+    users
+        .filter(email.eq(email_add).and(deleted_at.is_null()))
+        .select(User::as_select())
+        .first::<User>(conn)
+        .optional()
 }
 
 // create a new user

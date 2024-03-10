@@ -1,6 +1,7 @@
 use ntex::web::{self, Error};
 
 use crate::{
+    errors::AppError,
     handlers::Response,
     models::user::{self, NewUser, SearchQuery, User, UserLogin},
     repository::database,
@@ -11,16 +12,35 @@ use crate::{
 async fn create_user(
     pool: web::types::State<database::DbPool>,
     user: web::types::Json<NewUser>,
-) -> Result<web::HttpResponse, web::Error> {
+) -> Result<web::HttpResponse, AppError> {
     let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let cloned_user = user.clone();
+
+    // query the user by email to check if it already exists
+    let existing_user = web::block(move || user::get_user_by_email(&mut conn, &user.email))
+        .await
+        .map_err(|e| {
+            log::error!("Failed to get user by email: {:?}", e);
+            AppError::BadRequest(e.to_string())
+        })?;
+
+    if existing_user.is_some() {
+        return Err(AppError::UserAlreadyExists(
+            "User Email Already Exists".to_string(),
+        ));
+    }
+
+    // the conn variable is moved into the web::block closure, so it's no longer available after the closure is executed. To use the conn variable after the closure, it needs to get another one.
+    let mut conn = pool.get().expect("couldn't get db connection from pool");
+
     let new_user = web::block(move || {
         // Obtaining a connection from the pool is also a potentially blocking operation. So, it should be called within the `web::block` closure, as well.
-        user::create_user(&mut conn, user.into_inner())
+        user::create_user(&mut conn, cloned_user)
     })
     .await
     .map_err(|e| {
         log::error!("Failed to create new user: {:?}", e);
-        web::Error::from(e)
+        AppError::BadRequest(e.to_string())
     })?;
 
     Ok(web::HttpResponse::Created().json(&Response::<&User> {
@@ -39,28 +59,23 @@ async fn create_user(
 async fn user_login(
     pool: web::types::State<database::DbPool>,
     user: web::types::Json<UserLogin>,
-) -> Result<web::HttpResponse, web::Error> {
+) -> Result<web::HttpResponse, AppError> {
     let mut conn = pool.get().expect("couldn't get db connection from pool");
     let user = web::block(move || user::verify_user(&mut conn, &user.email, &user.password))
         .await
         .map_err(|e| {
             log::error!("Failed to verify user: {:?}", e);
-            web::Error::from(e)
+            AppError::BadRequest(e.to_string())
         })?;
 
     match user {
-        Some(user) => Ok(web::HttpResponse::Ok().json(&Response::<&User> {
+        Some(user) => Ok(web::HttpResponse::Found().json(&Response::<&User> {
             status: "success".to_string(),
             message: "User verified".to_string(),
             count: None,
             data: Some(&user),
         })),
-        None => Ok(web::HttpResponse::Unauthorized().json(&Response::<()> {
-            status: "failed".to_string(),
-            message: "User not verified".to_string(),
-            count: None,
-            data: None,
-        })),
+        None => Err(AppError::Unauthorized),
     }
 }
 
@@ -69,13 +84,13 @@ async fn user_login(
 async fn get_user_by_id(
     pool: web::types::State<database::DbPool>,
     user_id: web::types::Path<i32>,
-) -> Result<web::HttpResponse, web::Error> {
+) -> Result<web::HttpResponse, AppError> {
     let mut conn = pool.get().expect("couldn't get db connection from pool");
     let user = web::block(move || user::get_user_by_id(&mut conn, user_id.into_inner()))
         .await
         .map_err(|e| {
             log::error!("Failed to get user by id: {:?}", e);
-            web::Error::from(e)
+            AppError::BadRequest(e.to_string())
         })?;
 
     match user {
@@ -85,12 +100,7 @@ async fn get_user_by_id(
             count: None,
             data: Some(&user),
         })),
-        None => Ok(web::HttpResponse::NotFound().json(&Response::<()> {
-            status: "success".to_string(),
-            message: "User not found".to_string(),
-            count: None,
-            data: None,
-        })),
+        None => Err(AppError::Unauthorized),
     }
 }
 
@@ -99,13 +109,13 @@ async fn get_user_by_id(
 async fn get_users_by_name(
     pool: web::types::State<database::DbPool>,
     user_name: web::types::Path<String>,
-) -> Result<web::HttpResponse, Error> {
+) -> Result<web::HttpResponse, AppError> {
     let mut conn = pool.get().expect("couldn't get db connection from pool");
     let users = web::block(move || user::get_users_by_name(&mut conn, &user_name.into_inner()))
         .await
         .map_err(|e| {
             log::error!("Failed to get users by name: {:?}", e);
-            web::Error::from(e)
+            AppError::BadRequest(e.to_string())
         })?;
 
     Ok(web::HttpResponse::Ok().json(&Response::<Vec<User>> {
@@ -121,7 +131,7 @@ async fn get_users_by_name(
 async fn search_users(
     pool: web::types::State<database::DbPool>,
     query: web::types::Json<SearchQuery>,
-) -> Result<web::HttpResponse, Error> {
+) -> Result<web::HttpResponse, AppError> {
     let mut conn = pool.get().expect("couldn't get db connection from pool");
     let (users, count) = web::block(move || {
         user::search_users(
@@ -136,7 +146,7 @@ async fn search_users(
     .await
     .map_err(|e| {
         log::error!("Failed to search users: {:?}", e);
-        web::Error::from(e)
+        AppError::BadRequest(e.to_string())
     })?;
 
     // map_or_else 第一个闭包参数是没有元素时的处理，第二个闭包参数是有元素时的处理
@@ -161,13 +171,13 @@ async fn search_users(
 #[web::get("/users")]
 async fn get_all_users(
     pool: web::types::State<database::DbPool>,
-) -> Result<web::HttpResponse, Error> {
+) -> Result<web::HttpResponse, AppError> {
     let mut conn = pool.get().expect("couldn't get db connection from pool");
     let users = web::block(move || user::get_all_users(&mut conn))
         .await
         .map_err(|e| {
             log::error!("Failed to get all users: {:?}", e);
-            web::Error::from(e)
+            AppError::BadRequest(e.to_string())
         })?;
 
     Ok(web::HttpResponse::Ok().json(&Response::<Vec<User>> {
