@@ -17,12 +17,13 @@ async fn create_user(
     let cloned_user = user.clone();
 
     // query the user by email to check if it already exists
-    let existing_user = web::block(move || user::get_user_by_email(&mut conn, &user.email))
-        .await
-        .map_err(|e| {
-            log::error!("Failed to get user by email: {:?}", e);
-            AppError::BadRequest(e.to_string())
-        })?;
+    let existing_user =
+        web::block(move || user::get_user_by_email(&mut conn, &user.email.as_ref().unwrap()))
+            .await
+            .map_err(|e| {
+                log::error!("Failed to get user by email: {:?}", e);
+                AppError::BadRequest(e.to_string())
+            })?;
 
     if existing_user.is_some() {
         return Err(AppError::UserAlreadyExists(

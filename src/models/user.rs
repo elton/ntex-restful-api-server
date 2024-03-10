@@ -65,10 +65,10 @@ pub struct User {
 #[diesel(table_name = crate::models::schema::users)]
 pub struct NewUser {
     pub name: Option<String>,
-    pub email: String,
+    pub email: Option<String>,
     pub avatar: Option<String>,
-    pub role: Role,
-    pub password: String,
+    pub role: Option<Role>,
+    pub password: Option<String>,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub deleted_at: Option<chrono::NaiveDateTime>,
@@ -112,9 +112,9 @@ pub fn create_user(
 ) -> diesel::QueryResult<User> {
     use crate::models::schema::users::dsl::*;
 
-    let hashed_password = hash(&user.password, DEFAULT_COST).unwrap();
+    let hashed_password = hash(user.password.unwrap(), DEFAULT_COST).unwrap();
     let user = NewUser {
-        password: hashed_password,
+        password: Some(hashed_password),
         created_at: Some(chrono::Local::now().naive_local()),
         modified_at: Some(chrono::Local::now().naive_local()),
         ..user
