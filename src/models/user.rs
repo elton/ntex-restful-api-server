@@ -69,6 +69,7 @@ pub struct NewUser {
     pub avatar: Option<String>,
     pub role: Role,
     pub password: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub deleted_at: Option<chrono::NaiveDateTime>,
 }
@@ -114,9 +115,10 @@ pub fn create_user(
     let hashed_password = hash(&user.password, DEFAULT_COST).unwrap();
     let user = NewUser {
         password: hashed_password,
+        created_at: Some(chrono::Local::now().naive_local()),
+        modified_at: Some(chrono::Local::now().naive_local()),
         ..user
     };
-
     diesel::insert_into(users).values(&user).get_result(conn)
 }
 
