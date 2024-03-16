@@ -5,7 +5,7 @@ use ntex::web::{HttpRequest, HttpResponse, WebResponseError};
 #[derive(Debug, Display)]
 pub enum AppError {
     #[display(fmt = "Internal Server Error")]
-    InternalServerError,
+    InternalServerError(String),
     #[display(fmt = "Bad Request: {}", _0)]
     BadRequest(String),
     #[display(fmt = "Unauthorized")]
@@ -24,10 +24,10 @@ pub enum AppError {
 impl WebResponseError for AppError {
     fn error_response(&self, _: &HttpRequest) -> HttpResponse {
         match self {
-            AppError::InternalServerError => {
+            AppError::InternalServerError(ref message) => {
                 HttpResponse::InternalServerError().json(&Response::<()> {
                     status: "failed".to_string(),
-                    message: "Internal Server Error".to_string(),
+                    message: message.clone().to_string(),
                     count: None,
                     data: None,
                 })

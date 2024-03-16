@@ -9,7 +9,8 @@ use diesel::*;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
-use bcrypt::{hash, verify, DEFAULT_COST};
+use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use rand_core::OsRng;
 
 #[derive(Debug, PartialEq, FromSqlRow, AsExpression, Eq, Clone, Serialize, Deserialize, Copy)]
 #[diesel(sql_type = diesel::sql_types::VarChar)]
@@ -112,7 +113,17 @@ pub fn create_user(
 ) -> diesel::QueryResult<User> {
     use crate::models::schema::users::dsl::*;
 
-    let hashed_password = hash(user.password.unwrap(), DEFAULT_COST).unwrap();
+    let salt = SaltString::generate(&mut OsRng);
+    let hashed_password = Argon2::default()
+        .hash_password(user.password.unwrap().as_bytes(), &salt)
+        .map_err(|e| {
+            log::error!("Error while hashing password: {:?}", e);
+            diesel::result::Error::DeserializationError(
+                format!("Error while hashing password: {}", e).into(),
+            )
+        })
+        .map(|hash| hash.to_string())?;
+
     let user = NewUser {
         password: Some(hashed_password),
         created_at: Some(chrono::Local::now().naive_local()),
@@ -138,10 +149,22 @@ pub fn verify_user(
 
     match user {
         Some(user) => {
-            if verify::<&str>(pwd, &user.password).unwrap() {
-                Ok(Some(user))
-            } else {
-                Ok(None)
+            match PasswordHash::new(&user.password).map_err(|e| {
+                log::error!("Error while verifying password: {:?}", e);
+                diesel::result::Error::DeserializationError(
+                    format!("Error while verifying password: {}", e).into(),
+                )
+            }) {
+                Ok(hash) => argon2::Argon2::default()
+                    .verify_password(pwd.as_bytes(), &hash)
+                    .map_err(|e| {
+                        log::error!("Error while verifying password: {:?}", e);
+                        diesel::result::Error::DeserializationError(
+                            format!("Error while verifying password: {}", e).into(),
+                        )
+                    })
+                    .map_or(Ok(None), |_| Ok(Some(user))),
+                Err(e) => Err(e),
             }
         }
         None => Ok(None),
@@ -263,6 +286,11 @@ pub fn delete_user_by_id(
 #[test]
 fn test_verify_user() {
     let pwd = "123";
-    let hashed_pwd = hash(pwd, DEFAULT_COST).unwrap();
-    assert!(verify(pwd, &hashed_pwd).unwrap());
+    let salt = SaltString::generate(&mut OsRng);
+    let hashed_password = Argon2::default()
+        .hash_password(pwd.as_bytes(), &salt)
+        .unwrap();
+    assert!(argon2::Argon2::default()
+        .verify_password(pwd.as_bytes(), &hashed_password)
+        .is_ok());
 }
