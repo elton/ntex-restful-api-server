@@ -1,8 +1,10 @@
-use std::error::Error;
-
 use chrono::Local;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey};
+
 use serde::{Deserialize, Serialize};
+
+use base64::{engine::general_purpose, Engine as _};
+use dotenv::dotenv;
 
 // 快速说明
 //
@@ -18,9 +20,7 @@ use serde::{Deserialize, Serialize};
 //
 // curl -H 'content-type:application/json' -H 'Authorization: Bearer foobar' 127.0.0.1:9527/protected
 
-const JWT_SECRET: &[u8] = b"https://pwr.ink";
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Claims {
     iss: String, // 签发者
     sub: String, // 主题
@@ -52,23 +52,37 @@ pub struct Token {
     pub refresh_token: String,
 }
 
-pub fn create_token(claims: &Claims) -> Result<String, Box<dyn Error>> {
-    let jwt = encode(
-        &Header::default(), // using the default Algorithm HS256
-        &claims,
-        &EncodingKey::from_secret(JWT_SECRET),
-    )
-    .unwrap();
+pub fn generate_token(claims: &Claims) -> Result<String, jsonwebtoken::errors::Error> {
+    dotenv().ok();
+    let private_key =
+        std::env::var("ACCESS_TOKEN_PRIVATE_KEY").expect("ACCESS_TOKEN_PRIVATE_KEY must be set");
+    let bytes_private_key = general_purpose::STANDARD.decode(private_key).unwrap();
+    let decoded_private_key = String::from_utf8(bytes_private_key).unwrap();
 
-    Ok(jwt)
+    let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+    let token = encode(
+        &header,
+        &claims,
+        &EncodingKey::from_rsa_pem(decoded_private_key.as_bytes())?,
+    )?;
+
+    Ok(token)
 }
 
-pub fn verify_token(token: &str) -> Result<Claims, Box<dyn Error>> {
+pub fn verify_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+    dotenv().ok();
+    let public_key =
+        std::env::var("ACCESS_TOKEN_PUBLIC_KEY").expect("ACCESS_TOKEN_PUBLIC_KEY must be set");
+    let bytes_public_key = general_purpose::STANDARD.decode(public_key).unwrap();
+    let decoded_public_key = String::from_utf8(bytes_public_key).unwrap();
+
+    let validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
+
     let token = token.replace("Bearer ", "");
     let token_data = decode::<Claims>(
         &token,
-        &DecodingKey::from_secret(JWT_SECRET),
-        &Validation::default(),
+        &DecodingKey::from_rsa_pem(decoded_public_key.as_bytes())?,
+        &validation,
     )?;
 
     Ok(token_data.claims)
@@ -77,8 +91,10 @@ pub fn verify_token(token: &str) -> Result<Claims, Box<dyn Error>> {
 #[test]
 fn test_jwt() {
     let claims = Claims::new("elton", "pwr.ink");
-    let token = create_token(&claims).unwrap();
+    let token = generate_token(&claims).unwrap();
+    println!("token: {}", token);
     let claims = verify_token(&token).unwrap();
+    println!("claims: {:?}", claims);
 
     assert_eq!(claims.sub, "elton");
 }

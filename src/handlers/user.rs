@@ -1,10 +1,13 @@
 use ntex::web::{self, Error};
+use ntex_identity::{CookieIdentityPolicy, Identity, IdentityService};
+use serde::Serialize;
 
 use crate::{
     errors::AppError,
     handlers::Response,
     models::user::{self, NewUser, SearchQuery, User, UserLogin},
     repository::database,
+    utils::{jwt, jwt::Claims},
 };
 
 // create a new user
@@ -70,12 +73,31 @@ async fn user_login(
         })?;
 
     match user {
-        Some(user) => Ok(web::HttpResponse::Found().json(&Response::<&User> {
-            status: "success".to_string(),
-            message: "User verified".to_string(),
-            count: None,
-            data: Some(&user),
-        })),
+        Some(user) => {
+            let claims = Claims::new(&user.email, "pwr.ink");
+            let access_token = jwt::generate_token(&claims);
+            let refresh_token = jwt::generate_token(&claims);
+            let token = jwt::Token {
+                access_token: access_token.unwrap(),
+                refresh_token: refresh_token.unwrap(),
+            };
+
+            #[derive(Serialize)]
+            struct LoginResponse<'a> {
+                user: &'a User,
+                token: &'a jwt::Token,
+            }
+
+            Ok(web::HttpResponse::Ok().json(&Response::<LoginResponse> {
+                status: "success".to_string(),
+                message: "User verified".to_string(),
+                count: None,
+                data: Some(LoginResponse {
+                    user: &user,
+                    token: &token,
+                }),
+            }))
+        }
         None => Err(AppError::Unauthorized),
     }
 }
