@@ -1,11 +1,17 @@
+use std::sync::Arc;
+
 use chrono::Local;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey};
 
+use ntex::web::types::State;
+use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 
 use base64::{engine::general_purpose, Engine as _};
 use dotenv::dotenv;
 use ulid::Ulid;
+
+use crate::AppState;
 
 // 快速说明
 //
@@ -93,6 +99,18 @@ pub fn verify_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> 
 }
 
 // save jwt to redis
+pub async fn save_token_to_redis(
+    data: State<Arc<AppState>>,
+    token: &str,
+    max_age: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut redis_client = data.redis_client.get_multiplexed_async_connection().await?;
+
+    let claims = verify_token(&token).unwrap();
+
+    redis_client.set_ex(claims.token_id, token, max_age).await?;
+    Ok(())
+}
 
 #[test]
 fn test_jwt() {

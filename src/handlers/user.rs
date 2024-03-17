@@ -106,7 +106,7 @@ async fn user_login(
             token: &'a jwt::Token,
         }
 
-        // write jwt to redis
+        // write token to redis
 
         Ok(web::HttpResponse::Ok().json(&Response::<LoginResponse> {
             status: "success".to_string(),
