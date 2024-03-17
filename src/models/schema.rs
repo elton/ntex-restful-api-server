@@ -14,6 +14,6 @@ diesel::table! {
         role -> Varchar,
         created_at -> Nullable<Timestamptz>,
         modified_at -> Nullable<Timestamptz>,
-        deleted_at -> Nullable<Timestamp>,
+        deleted_at -> Nullable<Timestamptz>,
     }
 }

@@ -1,4 +1,5 @@
 use ::r2d2::PooledConnection;
+use chrono::Utc;
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
@@ -47,7 +48,8 @@ impl FromSql<VarChar, Pg> for Role {
 #[diesel(table_name = crate::models::schema::users)]
 // checks to verify that all field types in your struct are compatible with the backend you are using.
 #[diesel(check_for_backend(diesel::pg::Pg))]
-// the order of the fields in the struct must match the order of the columns in the table.
+// the order of the fields in the struct must match the order of the columns in the table and schema.
+
 // [derive(Selectable)] + #[diesel(check_for_backend(YourBackendType))] to check for mismatching fields at compile time. This drastically improves the quality of the generated error messages by pointing to concrete type mismatches at field level.You need to specify the concrete database backend this specific struct is indented to be used with, as otherwise rustc cannot correctly identify the required deserialization implementation.
 
 pub struct User {
@@ -55,11 +57,11 @@ pub struct User {
     pub name: String,
     pub email: String,
     pub avatar: Option<String>,
-    pub role: Role,
     pub password: String,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub modified_at: Option<chrono::NaiveDateTime>,
-    pub deleted_at: Option<chrono::NaiveDateTime>,
+    pub role: Role,
+    pub created_at: Option<chrono::DateTime<Utc>>,
+    pub modified_at: Option<chrono::DateTime<Utc>>,
+    pub deleted_at: Option<chrono::DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Insertable, AsChangeset)]
@@ -70,9 +72,9 @@ pub struct NewUser {
     pub avatar: Option<String>,
     pub role: Option<Role>,
     pub password: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub modified_at: Option<chrono::NaiveDateTime>,
-    pub deleted_at: Option<chrono::NaiveDateTime>,
+    pub created_at: Option<chrono::DateTime<Utc>>,
+    pub modified_at: Option<chrono::DateTime<Utc>>,
+    pub deleted_at: Option<chrono::DateTime<Utc>>,
 }
 
 // user login
@@ -126,8 +128,8 @@ pub fn create_user(
 
     let user = NewUser {
         password: Some(hashed_password),
-        created_at: Some(chrono::Local::now().naive_local()),
-        modified_at: Some(chrono::Local::now().naive_local()),
+        created_at: Some(chrono::Utc::now()),
+        modified_at: Some(chrono::Utc::now()),
         ..user
     };
     diesel::insert_into(users).values(&user).get_result(conn)
@@ -262,7 +264,7 @@ pub fn update_user_by_id(
 ) -> diesel::QueryResult<User> {
     use crate::models::schema::users::dsl::*;
 
-    user.modified_at = Some(chrono::Local::now().naive_local());
+    user.modified_at = Some(chrono::Utc::now());
 
     diesel::update(users.find(user_id))
         .set(&user)
@@ -276,7 +278,7 @@ pub fn delete_user_by_id(
 ) -> diesel::QueryResult<User> {
     use crate::models::schema::users::dsl::*;
 
-    let now = Some(chrono::Local::now().naive_local());
+    let now = Some(chrono::Utc::now());
 
     diesel::update(users.find(user_id))
         .set(deleted_at.eq(now))

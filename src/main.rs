@@ -21,16 +21,25 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     // set up database connection pool
-    let pool = repository::database::new();
+    let pool = match repository::database::new() {
+        Ok(pool) => {
+            log::info!("✅ Connection to the database is successful!");
+            pool
+        }
+        Err(e) => {
+            log::error!("🔥 Error connecting to the database: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     // set up redis connection
-    let redis_client = match repository::redis::new().await {
+    let redis_client = match repository::redis::new() {
         Ok(client) => {
-            println!("✅ Connection to the redis is successful!");
+            log::info!("✅ Connection to the redis is successful!");
             client
         }
         Err(e) => {
-            println!("🔥 Error connecting to Redis: {}", e);
+            log::error!("🔥 Error connecting to Redis: {}", e);
             std::process::exit(1);
         }
     };
