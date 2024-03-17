@@ -4,9 +4,15 @@ mod models;
 mod repository;
 mod utils;
 
+use std::sync::Arc;
+
 use ntex::web::{self, middleware};
 use ntex_cors::Cors;
-use ntex_identity::{CookieIdentityPolicy, IdentityService};
+
+pub struct AppState {
+    pool: repository::database::DbPool,
+    redis_client: redis::Client,
+}
 
 #[ntex::main]
 async fn main() -> std::io::Result<()> {
@@ -17,23 +23,28 @@ async fn main() -> std::io::Result<()> {
     // set up database connection pool
     let pool = repository::database::new();
 
-    let domain: String = std::env::var("DOMAIN").unwrap_or_else(|_| "localhost".to_string());
+    // set up redis connection
+    let redis_client = match repository::redis::new().await {
+        Ok(client) => {
+            println!("✅ Connection to the redis is successful!");
+            client
+        }
+        Err(e) => {
+            println!("🔥 Error connecting to Redis: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     // web::HttpServer can be shutdown gracefully.
     web::HttpServer::new(move || {
         web::App::new()
             // set up DB pool to be used with web::State<Pool> extractor
-            .state(pool.clone())
+            .state(Arc::new(AppState {
+                pool: pool.clone(),
+                redis_client: redis_client.clone(),
+            }))
             // enable logger
             .wrap(middleware::Logger::default())
-            .wrap(IdentityService::new(
-                // <- create identity middleware
-                CookieIdentityPolicy::new(&[0; 32]) // <- create cookie identity policy
-                    .name("pwr-auth")
-                    .path("/")
-                    .domain(domain.as_str())
-                    .secure(false),
-            ))
             .wrap(
                 Cors::new() // <- Construct CORS middleware builder
                     .finish(),

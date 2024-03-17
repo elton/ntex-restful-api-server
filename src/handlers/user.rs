@@ -1,22 +1,26 @@
+use std::sync::Arc;
+
 use ntex::web::{self, Error};
-use ntex_identity::{CookieIdentityPolicy, Identity, IdentityService};
 use serde::Serialize;
 
 use crate::{
     errors::AppError,
     handlers::Response,
     models::user::{self, NewUser, SearchQuery, User, UserLogin},
-    repository::database,
     utils::{jwt, jwt::Claims},
+    AppState,
 };
 
 // create a new user
 #[web::post("/user")]
 async fn create_user(
-    pool: web::types::State<database::DbPool>,
+    data: web::types::State<Arc<AppState>>,
     user: web::types::Json<NewUser>,
 ) -> Result<web::HttpResponse, AppError> {
-    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let mut conn = data
+        .pool
+        .get()
+        .expect("couldn't get db connection from pool");
     let cloned_user = user.clone();
 
     // query the user by email to check if it already exists
@@ -35,7 +39,10 @@ async fn create_user(
     }
 
     // the conn variable is moved into the web::block closure, so it's no longer available after the closure is executed. To use the conn variable after the closure, it needs to get another one.
-    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let mut conn = data
+        .pool
+        .get()
+        .expect("couldn't get db connection from pool");
 
     let new_user = web::block(move || {
         // Obtaining a connection from the pool is also a potentially blocking operation. So, it should be called within the `web::block` closure, as well.
@@ -61,10 +68,21 @@ async fn create_user(
 // user login with email and password
 #[web::post("/user/login")]
 async fn user_login(
-    pool: web::types::State<database::DbPool>,
+    data: web::types::State<Arc<AppState>>,
     user: web::types::Json<UserLogin>,
 ) -> Result<web::HttpResponse, AppError> {
-    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    // check if email and password are provided
+    if (&user).email.is_empty() || (&user).password.is_empty() {
+        return Err(AppError::BadRequest(
+            "Email and password are required".to_string(),
+        ));
+    }
+
+    // verify user by email and password from db
+    let mut conn = data
+        .pool
+        .get()
+        .expect("couldn't get db connection from pool");
     let user = web::block(move || user::verify_user(&mut conn, &user.email, &user.password))
         .await
         .map_err(|e| {
@@ -72,43 +90,49 @@ async fn user_login(
             AppError::BadRequest(e.to_string())
         })?;
 
-    match user {
-        Some(user) => {
-            let claims = Claims::new(&user.email, "pwr.ink");
-            let access_token = jwt::generate_token(&claims);
-            let refresh_token = jwt::generate_token(&claims);
-            let token = jwt::Token {
-                access_token: access_token.unwrap(),
-                refresh_token: refresh_token.unwrap(),
-            };
+    if let Some(user) = user {
+        // if user is verified, generate jwt token
+        let claims = Claims::new(&user.email, "pwr.ink");
+        let access_token = jwt::generate_token(&claims);
+        let refresh_token = jwt::generate_token(&claims);
+        let token = jwt::Token {
+            access_token: access_token.unwrap(),
+            refresh_token: refresh_token.unwrap(),
+        };
 
-            #[derive(Serialize)]
-            struct LoginResponse<'a> {
-                user: &'a User,
-                token: &'a jwt::Token,
-            }
-
-            Ok(web::HttpResponse::Ok().json(&Response::<LoginResponse> {
-                status: "success".to_string(),
-                message: "User verified".to_string(),
-                count: None,
-                data: Some(LoginResponse {
-                    user: &user,
-                    token: &token,
-                }),
-            }))
+        #[derive(Serialize)]
+        struct LoginResponse<'a> {
+            user: &'a User,
+            token: &'a jwt::Token,
         }
-        None => Err(AppError::Unauthorized),
+
+        // write jwt to redis
+
+        Ok(web::HttpResponse::Ok().json(&Response::<LoginResponse> {
+            status: "success".to_string(),
+            message: "User verified".to_string(),
+            count: None,
+            data: Some(LoginResponse {
+                user: &user,
+                token: &token,
+            }),
+        }))
+    } else {
+        // if user is not verified, return unauthorized
+        Err(AppError::Unauthorized)
     }
 }
 
 // get a user by id
 #[web::get("/user/{id}")]
 async fn get_user_by_id(
-    pool: web::types::State<database::DbPool>,
+    data: web::types::State<Arc<AppState>>,
     user_id: web::types::Path<i32>,
 ) -> Result<web::HttpResponse, AppError> {
-    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let mut conn = data
+        .pool
+        .get()
+        .expect("couldn't get db connection from pool");
     let user = web::block(move || user::get_user_by_id(&mut conn, user_id.into_inner()))
         .await
         .map_err(|e| {
@@ -130,10 +154,13 @@ async fn get_user_by_id(
 // get users by name ignore case
 #[web::get("/users/{name}")]
 async fn get_users_by_name(
-    pool: web::types::State<database::DbPool>,
+    data: web::types::State<Arc<AppState>>,
     user_name: web::types::Path<String>,
 ) -> Result<web::HttpResponse, AppError> {
-    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let mut conn = data
+        .pool
+        .get()
+        .expect("couldn't get db connection from pool");
     let users = web::block(move || user::get_users_by_name(&mut conn, &user_name.into_inner()))
         .await
         .map_err(|e| {
@@ -152,10 +179,13 @@ async fn get_users_by_name(
 // search users by name or email with pagination and sorting
 #[web::post("/users/search")]
 async fn search_users(
-    pool: web::types::State<database::DbPool>,
+    data: web::types::State<Arc<AppState>>,
     query: web::types::Json<SearchQuery>,
 ) -> Result<web::HttpResponse, AppError> {
-    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let mut conn = data
+        .pool
+        .get()
+        .expect("couldn't get db connection from pool");
     let (users, count) = web::block(move || {
         user::search_users(
             &mut conn,
@@ -193,9 +223,12 @@ async fn search_users(
 // get all users
 #[web::get("/users")]
 async fn get_all_users(
-    pool: web::types::State<database::DbPool>,
+    data: web::types::State<Arc<AppState>>,
 ) -> Result<web::HttpResponse, AppError> {
-    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let mut conn = data
+        .pool
+        .get()
+        .expect("couldn't get db connection from pool");
     let users = web::block(move || user::get_all_users(&mut conn))
         .await
         .map_err(|e| {
@@ -214,11 +247,14 @@ async fn get_all_users(
 // update a user by id
 #[web::put("/user/{id}")]
 async fn update_user_by_id(
-    pool: web::types::State<database::DbPool>,
+    data: web::types::State<Arc<AppState>>,
     user_id: web::types::Path<i32>,
     user: web::types::Json<NewUser>,
 ) -> Result<web::HttpResponse, Error> {
-    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let mut conn = data
+        .pool
+        .get()
+        .expect("couldn't get db connection from pool");
     let updated_user = web::block(move || {
         user::update_user_by_id(&mut conn, user_id.into_inner(), user.into_inner())
     })
@@ -242,10 +278,13 @@ async fn update_user_by_id(
 // delete a user by id, soft delete by setting deleted_at
 #[web::delete("/user/{id}")]
 async fn delete_user_by_id(
-    pool: web::types::State<database::DbPool>,
+    data: web::types::State<Arc<AppState>>,
     user_id: web::types::Path<i32>,
 ) -> Result<web::HttpResponse, Error> {
-    let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let mut conn = data
+        .pool
+        .get()
+        .expect("couldn't get db connection from pool");
     let deleted_user = web::block(move || user::delete_user_by_id(&mut conn, user_id.into_inner()))
         .await
         .map_err(|e| {

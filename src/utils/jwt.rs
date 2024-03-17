@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use base64::{engine::general_purpose, Engine as _};
 use dotenv::dotenv;
+use ulid::Ulid;
 
 // 快速说明
 //
@@ -22,10 +23,11 @@ use dotenv::dotenv;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Claims {
-    iss: String, // 签发者
-    sub: String, // 主题
-    iat: usize,  // 签发时间
-    exp: usize,  // 过期时间
+    token_id: String, // token ID
+    iss: String,      // 签发者
+    sub: String,      // 主题
+    iat: usize,       // 签发时间
+    exp: usize,       // 过期时间
 }
 
 impl Claims {
@@ -36,8 +38,10 @@ impl Claims {
             .timestamp()
             .try_into()
             .unwrap();
+        let token_id = Ulid::new().to_string();
 
         Self {
+            token_id,
             iss: iss.to_owned(),
             sub: sub.to_owned(),
             iat,
@@ -87,6 +91,8 @@ pub fn verify_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> 
 
     Ok(token_data.claims)
 }
+
+// save jwt to redis
 
 #[test]
 fn test_jwt() {
