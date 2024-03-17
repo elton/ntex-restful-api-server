@@ -1,4 +1,4 @@
--- Add up migration script here
+-- Your SQL goes here
 CREATE TABLE "users" (
   id SERIAL PRIMARY KEY,
   name VARCHAR(128) NOT NULL,
