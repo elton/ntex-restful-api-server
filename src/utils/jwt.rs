@@ -29,11 +29,11 @@ use crate::AppState;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Claims {
-    token_id: String, // token ID
-    iss: String,      // 签发者
-    sub: String,      // 主题
-    iat: usize,       // 签发时间
-    exp: usize,       // 过期时间
+    pub token_id: String, // token ID
+    pub iss: String,      // 签发者
+    pub sub: String,      // 主题
+    pub iat: usize,       // 签发时间
+    pub exp: usize,       // 过期时间
 }
 
 impl Claims {
@@ -44,10 +44,9 @@ impl Claims {
             .timestamp()
             .try_into()
             .unwrap();
-        let token_id = Ulid::new().to_string();
 
         Self {
-            token_id,
+            token_id: "".to_string(),
             iss: iss.to_owned(),
             sub: sub.to_owned(),
             iat,
@@ -62,7 +61,7 @@ pub struct Token {
     pub refresh_token: String,
 }
 
-pub fn generate_token(claims: &Claims) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn generate_token(claims: &mut Claims) -> Result<String, jsonwebtoken::errors::Error> {
     dotenv().ok();
     let private_key =
         std::env::var("ACCESS_TOKEN_PRIVATE_KEY").expect("ACCESS_TOKEN_PRIVATE_KEY must be set");
@@ -70,6 +69,8 @@ pub fn generate_token(claims: &Claims) -> Result<String, jsonwebtoken::errors::E
     let decoded_private_key = String::from_utf8(bytes_private_key).unwrap();
 
     let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+
+    claims.token_id = Ulid::new().to_string();
     let token = encode(
         &header,
         &claims,
@@ -100,22 +101,21 @@ pub fn verify_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> 
 
 // save jwt to redis
 pub async fn save_token_to_redis(
-    data: State<Arc<AppState>>,
-    token: &str,
+    data: &State<Arc<AppState>>,
+    token_id: &str,
+    user_id: usize,
     max_age: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut redis_client = data.redis_client.get_multiplexed_async_connection().await?;
 
-    let claims = verify_token(&token).unwrap();
-
-    redis_client.set_ex(claims.token_id, token, max_age).await?;
+    redis_client.set_ex(token_id, user_id, max_age).await?;
     Ok(())
 }
 
 #[test]
 fn test_jwt() {
-    let claims = Claims::new("elton", "pwr.ink");
-    let token = generate_token(&claims).unwrap();
+    let mut claims = Claims::new("elton", "pwr.ink");
+    let token = generate_token(&mut claims).unwrap();
     println!("token: {}", token);
     let claims = verify_token(&token).unwrap();
     println!("claims: {:?}", claims);

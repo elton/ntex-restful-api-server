@@ -1,7 +1,7 @@
-use std::sync::Arc;
-
+use dotenv::dotenv;
 use ntex::web::{self, Error};
 use serde::Serialize;
+use std::sync::Arc;
 
 use crate::{
     errors::AppError,
@@ -92,9 +92,9 @@ async fn user_login(
 
     if let Some(user) = user {
         // if user is verified, generate jwt token
-        let claims = Claims::new(&user.email, "pwr.ink");
-        let access_token = jwt::generate_token(&claims);
-        let refresh_token = jwt::generate_token(&claims);
+        let mut claims = Claims::new(&user.email, "pwr.ink");
+        let access_token = jwt::generate_token(&mut claims);
+        let refresh_token = jwt::generate_token(&mut claims);
         let token = jwt::Token {
             access_token: access_token.unwrap(),
             refresh_token: refresh_token.unwrap(),
@@ -106,7 +106,38 @@ async fn user_login(
             token: &'a jwt::Token,
         }
 
-        // write token to redis
+        let access_claims = jwt::verify_token(token.access_token.as_str()).unwrap();
+        let refresh_claims = jwt::verify_token(token.refresh_token.as_str()).unwrap();
+
+        dotenv().ok();
+        let access_token_max_age =
+            std::env::var("ACCESS_TOKEN_MAXAGE").expect("DATABASE_URL must be set");
+        let refresh_token_max_age =
+            std::env::var("REFRESH_TOKEN_MAXAGE").expect("DATABASE_URL must be set");
+
+        // save tokens data to redis with their expire time
+        jwt::save_token_to_redis(
+            &data,
+            access_claims.token_id.as_str(),
+            user.id as usize,
+            access_token_max_age.parse::<u64>().unwrap() * 60,
+        )
+        .await
+        .map_err(|e| {
+            log::error!("Failed to save access_token: {:?}", e);
+            AppError::BadRequest(e.to_string())
+        })?;
+        jwt::save_token_to_redis(
+            &data,
+            refresh_claims.token_id.as_str(),
+            user.id as usize,
+            refresh_token_max_age.parse::<u64>().unwrap() * 60,
+        )
+        .await
+        .map_err(|e| {
+            log::error!("Failed to save refresh_token: {:?}", e);
+            AppError::BadRequest(e.to_string())
+        })?;
 
         Ok(web::HttpResponse::Ok().json(&Response::<LoginResponse> {
             status: "success".to_string(),
