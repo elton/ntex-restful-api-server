@@ -49,7 +49,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
                 web::resource("/users")
                     .guard(AuthorizationHeader)
                     .route(web::post().to(user::create_user))
-                    .route(web::get().to(user::get_user_by_id_or_name::<user::UserQuery>))
+                    .route(web::get().to(user::get_user_by_id_or_name::<user::Info>))
                     .route(web::put().to(user::update_user_by_id))
                     .route(web::delete().to(user::delete_user_by_id::<user::UserQuery>)),
                 web::resource("/users/search")

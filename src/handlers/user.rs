@@ -19,6 +19,12 @@ pub enum UserQuery {
     Name { name: String },
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct Info {
+    id: Option<i32>,
+    name: Option<String>,
+}
+
 // create a new user
 // #[web::post("/user")]
 pub async fn create_user(
@@ -161,10 +167,13 @@ pub async fn user_login(
     }
 }
 
-// get a user by id or name
+/// get a user by id or name
+/// extract path info from "users?id={id}&name={name}" url
+/// {id} - deserializes to a i32
+/// {name} -  - deserializes to a String
 pub async fn get_user_by_id_or_name<T>(
     data: web::types::State<Arc<AppState>>,
-    user_query: web::types::Json<UserQuery>,
+    web::types::Query(info): web::types::Query<Info>,
 ) -> Result<web::HttpResponse, AppError>
 where
     T: Serialize + Send,
@@ -174,15 +183,27 @@ where
         .get()
         .expect("couldn't get db connection from pool");
 
-    let user_result = web::block(move || match user_query.into_inner() {
-        UserQuery::Id { id } => user::get_users_by_id(&mut conn, id),
-        UserQuery::Name { name } => user::get_users_by_name(&mut conn, &name),
-    })
-    .await
-    .map_err(|e| {
-        log::error!("Failed to get user: {:?}", e);
-        AppError::BadRequest(e.to_string())
-    })?;
+    let Info { id, name } = info;
+
+    let user_result = if let Some(id) = id {
+        web::block(move || user::get_users_by_id(&mut conn, id))
+            .await
+            .map_err(|e| {
+                log::error!("Failed to get user: {:?}", e);
+                AppError::BadRequest(e.to_string())
+            })?
+    } else if let Some(name) = name {
+        web::block(move || user::get_users_by_name(&mut conn, &name))
+            .await
+            .map_err(|e| {
+                log::error!("Failed to get user: {:?}", e);
+                AppError::BadRequest(e.to_string())
+            })?
+    } else {
+        return Err(AppError::BadRequest(
+            "Please provide either an id or a name".to_string(),
+        ));
+    };
 
     Ok(web::HttpResponse::Ok().json(&Response::<Vec<User>> {
         status: "success".to_string(),
@@ -286,7 +307,7 @@ pub async fn update_user_by_id(
 // delete a user by id, soft delete by setting deleted_at
 pub async fn delete_user_by_id<T>(
     data: web::types::State<Arc<AppState>>,
-    user_query: web::types::Json<UserQuery>,
+    web::types::Query(info): web::types::Query<Info>,
 ) -> Result<web::HttpResponse, Error>
 where
     T: Serialize + Send,
@@ -295,8 +316,9 @@ where
         .pool
         .get()
         .expect("couldn't get db connection from pool");
-    let deleted_user = web::block(move || match user_query.into_inner() {
-        UserQuery::Id { id } => user::delete_user_by_id(&mut conn, id),
+
+    let deleted_user = web::block(move || match info.id {
+        Some(id) => user::delete_user_by_id(&mut conn, id),
         _ => Err(diesel::result::Error::DeserializationError(
             "User id is required".into(),
         )),
