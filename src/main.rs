@@ -1,12 +1,13 @@
 mod errors;
 mod handlers;
+mod middleware;
 mod models;
 mod repository;
 mod utils;
 
 use std::sync::Arc;
 
-use ntex::web::{self, middleware};
+use ntex::web::{self};
 use ntex_cors::Cors;
 
 pub struct AppState {
@@ -53,7 +54,7 @@ async fn main() -> std::io::Result<()> {
                 redis_client: redis_client.clone(),
             }))
             // enable logger
-            .wrap(middleware::Logger::default())
+            .wrap(web::middleware::Logger::default())
             .wrap(
                 Cors::new() // <- Construct CORS middleware builder
                     .finish(),
@@ -63,6 +64,7 @@ async fn main() -> std::io::Result<()> {
             // enable Compression, A response's Content-Encoding header defaults to ContentEncoding::Auto, which performs automatic content compression negotiation based on the request's Accept-Encoding header.
             // should add "compress" feature to the Cargo.toml
             .wrap(web::middleware::Compress::default())
+            .wrap(middleware::auth::Auth)
             .configure(handlers::config)
     })
     .bind(("127.0.0.1", 8080))?

@@ -4,7 +4,7 @@ use chrono::Local;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey};
 
 use ntex::web::types::State;
-use redis::AsyncCommands;
+use redis::{aio::MultiplexedConnection, AsyncCommands};
 use serde::{Deserialize, Serialize};
 
 use base64::{engine::general_purpose, Engine as _};
@@ -36,6 +36,11 @@ pub struct Claims {
     pub exp: usize,       // 过期时间
 }
 
+pub enum TokenType {
+    AccessToken,
+    RefreshToken,
+}
+
 impl Claims {
     pub fn new(sub: &str, iss: &str) -> Self {
         let now = Local::now();
@@ -61,10 +66,18 @@ pub struct Token {
     pub refresh_token: String,
 }
 
-pub fn generate_token(claims: &mut Claims) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn generate_token(
+    kind: TokenType,
+    claims: &mut Claims,
+) -> Result<String, jsonwebtoken::errors::Error> {
     dotenv().ok();
-    let private_key =
-        std::env::var("ACCESS_TOKEN_PRIVATE_KEY").expect("ACCESS_TOKEN_PRIVATE_KEY must be set");
+    let private_key = match kind {
+        TokenType::AccessToken => {
+            std::env::var("ACCESS_TOKEN_PRIVATE_KEY").expect("ACCESS_TOKEN_PRIVATE_KEY must be set")
+        }
+        TokenType::RefreshToken => std::env::var("REFRESH_TOKEN_PRIVATE_KEY")
+            .expect("REFRESH_TOKEN_PRIVATE_KEY must be set"),
+    };
     let bytes_private_key = general_purpose::STANDARD.decode(private_key).unwrap();
     let decoded_private_key = String::from_utf8(bytes_private_key).unwrap();
 
@@ -80,10 +93,17 @@ pub fn generate_token(claims: &mut Claims) -> Result<String, jsonwebtoken::error
     Ok(token)
 }
 
-pub fn verify_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+pub fn decode_token(kind: TokenType, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
     dotenv().ok();
+
     let public_key =
-        std::env::var("ACCESS_TOKEN_PUBLIC_KEY").expect("ACCESS_TOKEN_PUBLIC_KEY must be set");
+        match kind {
+            TokenType::AccessToken => std::env::var("ACCESS_TOKEN_PUBLIC_KEY")
+                .expect("ACCESS_TOKEN_PUBLIC_KEY must be set"),
+            TokenType::RefreshToken => std::env::var("REFRESH_TOKEN_PUBLIC_KEY")
+                .expect("REFRESH_TOKEN_PUBLIC_KEY must be set"),
+        };
+
     let bytes_public_key = general_purpose::STANDARD.decode(public_key).unwrap();
     let decoded_public_key = String::from_utf8(bytes_public_key).unwrap();
 
@@ -112,13 +132,39 @@ pub async fn save_token_to_redis(
     Ok(())
 }
 
+/// get user_id from redis by jwt token
+/// kind is the type of token, it can be AccessToken or RefreshToken
+/// token is the jwt token
+
+pub async fn get_user_id_from_redis(
+    conn: &mut MultiplexedConnection,
+    kind: TokenType,
+    token: &str,
+) -> Result<Option<usize>, Box<dyn std::error::Error>> {
+    let token = token.replace("Bearer ", "");
+    if let Ok(claims) = decode_token(kind, token.as_str()) {
+        let user_id = conn.get(claims.token_id).await?;
+        Ok(Some(user_id))
+    } else {
+        Err("Invalid token".into())
+    }
+}
+
 #[test]
 fn test_jwt() {
     let mut claims = Claims::new("elton", "pwr.ink");
-    let token = generate_token(&mut claims).unwrap();
-    println!("token: {}", token);
-    let claims = verify_token(&token).unwrap();
+    let token = generate_token(TokenType::AccessToken, &mut claims).unwrap();
+    println!("access token: {}", token);
+    let claims = decode_token(TokenType::AccessToken, &token).unwrap();
     println!("claims: {:?}", claims);
 
     assert_eq!(claims.sub, "elton");
+
+    let mut claims = Claims::new("elton", "refresh_claims");
+    let token = generate_token(TokenType::RefreshToken, &mut claims).unwrap();
+    println!("refresh token: {}", token);
+    let claims = decode_token(TokenType::RefreshToken, &token).unwrap();
+    println!("claims: {:?}", claims);
+
+    assert_eq!(claims.iss, "refresh_claims");
 }

@@ -106,8 +106,8 @@ pub async fn user_login(
     if let Some(user) = user {
         // if user is verified, generate jwt token
         let mut claims = Claims::new(&user.email, "pwr.ink");
-        let access_token = jwt::generate_token(&mut claims);
-        let refresh_token = jwt::generate_token(&mut claims);
+        let access_token = jwt::generate_token(jwt::TokenType::AccessToken, &mut claims);
+        let refresh_token = jwt::generate_token(jwt::TokenType::RefreshToken, &mut claims);
         let token = jwt::Token {
             access_token: access_token.unwrap(),
             refresh_token: refresh_token.unwrap(),
@@ -119,8 +119,10 @@ pub async fn user_login(
             token: &'a jwt::Token,
         }
 
-        let access_claims = jwt::verify_token(token.access_token.as_str()).unwrap();
-        let refresh_claims = jwt::verify_token(token.refresh_token.as_str()).unwrap();
+        let access_claims =
+            jwt::decode_token(jwt::TokenType::AccessToken, token.access_token.as_str()).unwrap();
+        let refresh_claims =
+            jwt::decode_token(jwt::TokenType::RefreshToken, token.refresh_token.as_str()).unwrap();
 
         dotenv().ok();
         let access_token_max_age =
