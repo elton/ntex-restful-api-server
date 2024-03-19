@@ -6,6 +6,7 @@ use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::VarChar;
+use diesel::BoolExpressionMethods;
 use diesel::*;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -42,7 +43,7 @@ impl FromSql<VarChar, Pg> for Role {
         }
     }
 }
-// Queryable will generate all of the code needed to load a Post struct from a SQL query.
+// Queryable will generate all of the code needed to load a Post struct from a SQL query. Later, you can use User::as_select() to generate a select clause for your model type based on the table defined via the #[diesel(table_name = "your_table_name")] attribute.
 // Selectable will generate code to construct a matching select clause based on your model type based on the table defined via the #[diesel(table_name = "your_table_name")] attribute.
 #[derive(Queryable, Selectable, Serialize, Deserialize, Debug, Clone)]
 #[diesel(table_name = crate::models::schema::users)]
@@ -67,6 +68,7 @@ pub struct User {
 #[derive(Deserialize, Serialize, Debug, Clone, Insertable, AsChangeset)]
 #[diesel(table_name = crate::models::schema::users)]
 pub struct NewUser {
+    pub id: Option<i32>,
     pub name: Option<String>,
     pub email: Option<String>,
     pub avatar: Option<String>,
@@ -174,17 +176,18 @@ pub fn verify_user(
 }
 
 // get a user by id
-pub fn get_user_by_id(
+pub fn get_users_by_id(
     conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
     user_id: i32,
-) -> diesel::QueryResult<Option<User>> {
+) -> diesel::QueryResult<Vec<User>> {
     use crate::models::schema::users::dsl::*;
 
-    users
+    let user_vec = users
         .filter(id.eq(user_id).and(deleted_at.is_null()))
         .select(User::as_select())
-        .first::<User>(conn)
-        .optional()
+        .load::<User>(conn)?;
+
+    Ok(user_vec)
 }
 
 // get a users by name ignore case
@@ -243,19 +246,6 @@ pub fn search_users(
     Ok((user_list, total_count))
 }
 
-// get all users
-pub fn get_all_users(
-    conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
-) -> diesel::QueryResult<Vec<User>> {
-    use crate::models::schema::users::dsl::*;
-
-    users
-        .filter(deleted_at.is_null())
-        .select(User::as_select())
-        .order_by(created_at.desc())
-        .load(conn)
-}
-
 // update a user by id
 pub fn update_user_by_id(
     conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
@@ -267,7 +257,7 @@ pub fn update_user_by_id(
     user.modified_at = Some(chrono::Utc::now());
 
     diesel::update(users.find(user_id))
-        .set(&user)
+        .set(user)
         .get_result(conn)
 }
 

@@ -1,6 +1,7 @@
 use dotenv::dotenv;
+use ntex::http;
 use ntex::web::{self, Error};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::{
@@ -11,9 +12,16 @@ use crate::{
     AppState,
 };
 
+#[derive(Deserialize, Serialize)]
+#[serde(untagged)] // 可以自动反序列化像 {id: 123} 或 {name: "Jason"} 这样的 JSON 数据
+pub enum UserQuery {
+    Id { id: i32 },
+    Name { name: String },
+}
+
 // create a new user
-#[web::post("/user")]
-async fn create_user(
+// #[web::post("/user")]
+pub async fn create_user(
     data: web::types::State<Arc<AppState>>,
     user: web::types::Json<NewUser>,
 ) -> Result<web::HttpResponse, AppError> {
@@ -66,8 +74,7 @@ async fn create_user(
 }
 
 // user login with email and password
-#[web::post("/user/login")]
-async fn user_login(
+pub async fn user_login(
     data: web::types::State<Arc<AppState>>,
     user: web::types::Json<UserLogin>,
 ) -> Result<web::HttpResponse, AppError> {
@@ -154,65 +161,57 @@ async fn user_login(
     }
 }
 
-// get a user by id
-#[web::get("/user/{id}")]
-async fn get_user_by_id(
+// get a user by id or name
+pub async fn get_user_by_id_or_name<T>(
     data: web::types::State<Arc<AppState>>,
-    user_id: web::types::Path<i32>,
-) -> Result<web::HttpResponse, AppError> {
+    user_query: web::types::Json<UserQuery>,
+) -> Result<web::HttpResponse, AppError>
+where
+    T: Serialize + Send,
+{
     let mut conn = data
         .pool
         .get()
         .expect("couldn't get db connection from pool");
-    let user = web::block(move || user::get_user_by_id(&mut conn, user_id.into_inner()))
-        .await
-        .map_err(|e| {
-            log::error!("Failed to get user by id: {:?}", e);
-            AppError::BadRequest(e.to_string())
-        })?;
 
-    match user {
-        Some(user) => Ok(web::HttpResponse::Ok().json(&Response::<&User> {
-            status: "success".to_string(),
-            message: "User found".to_string(),
-            count: None,
-            data: Some(&user),
-        })),
-        None => Err(AppError::Unauthorized),
-    }
-}
-
-// get users by name ignore case
-#[web::get("/users/{name}")]
-async fn get_users_by_name(
-    data: web::types::State<Arc<AppState>>,
-    user_name: web::types::Path<String>,
-) -> Result<web::HttpResponse, AppError> {
-    let mut conn = data
-        .pool
-        .get()
-        .expect("couldn't get db connection from pool");
-    let users = web::block(move || user::get_users_by_name(&mut conn, &user_name.into_inner()))
-        .await
-        .map_err(|e| {
-            log::error!("Failed to get users by name: {:?}", e);
-            AppError::BadRequest(e.to_string())
-        })?;
+    let user_result = web::block(move || match user_query.into_inner() {
+        UserQuery::Id { id } => user::get_users_by_id(&mut conn, id),
+        UserQuery::Name { name } => user::get_users_by_name(&mut conn, &name),
+    })
+    .await
+    .map_err(|e| {
+        log::error!("Failed to get user: {:?}", e);
+        AppError::BadRequest(e.to_string())
+    })?;
 
     Ok(web::HttpResponse::Ok().json(&Response::<Vec<User>> {
         status: "success".to_string(),
-        message: "Users found".to_string(),
+        message: "User found".to_string(),
         count: None,
-        data: Some(users),
+        data: Some(user_result),
     }))
 }
 
 // search users by name or email with pagination and sorting
-#[web::post("/users/search")]
-async fn search_users(
+// #[web::post("/users/search")]
+pub async fn search_users(
     data: web::types::State<Arc<AppState>>,
     query: web::types::Json<SearchQuery>,
+    req: ntex::web::HttpRequest,
 ) -> Result<web::HttpResponse, AppError> {
+    // get headers from request
+    let headers = req
+        .headers()
+        // get the authorization header from the request, which contains the jwt token.
+        // This is the same as `.get("Authorization")`
+        .get(http::header::AUTHORIZATION)
+        .unwrap()
+        .to_str()
+        .unwrap();
+
+    let token = headers.replace("Bearer ", "");
+    log::info!("token: {:?}", &token);
+
     let mut conn = data
         .pool
         .get()
@@ -251,43 +250,21 @@ async fn search_users(
     }))
 }
 
-// get all users
-#[web::get("/users")]
-async fn get_all_users(
-    data: web::types::State<Arc<AppState>>,
-) -> Result<web::HttpResponse, AppError> {
-    let mut conn = data
-        .pool
-        .get()
-        .expect("couldn't get db connection from pool");
-    let users = web::block(move || user::get_all_users(&mut conn))
-        .await
-        .map_err(|e| {
-            log::error!("Failed to get all users: {:?}", e);
-            AppError::BadRequest(e.to_string())
-        })?;
-
-    Ok(web::HttpResponse::Ok().json(&Response::<Vec<User>> {
-        status: "success".to_string(),
-        message: "Users found".to_string(),
-        count: Some(users.len() as i64),
-        data: Some(users),
-    }))
-}
-
 // update a user by id
-#[web::put("/user/{id}")]
-async fn update_user_by_id(
+pub async fn update_user_by_id(
     data: web::types::State<Arc<AppState>>,
-    user_id: web::types::Path<i32>,
     user: web::types::Json<NewUser>,
 ) -> Result<web::HttpResponse, Error> {
     let mut conn = data
         .pool
         .get()
         .expect("couldn't get db connection from pool");
-    let updated_user = web::block(move || {
-        user::update_user_by_id(&mut conn, user_id.into_inner(), user.into_inner())
+
+    let updated_user = web::block(move || match user.id {
+        Some(id) => user::update_user_by_id(&mut conn, id, user.into_inner()),
+        None => Err(diesel::result::Error::DeserializationError(
+            "User id is required".into(),
+        )),
     })
     .await
     .map_err(|e| {
@@ -307,21 +284,28 @@ async fn update_user_by_id(
 }
 
 // delete a user by id, soft delete by setting deleted_at
-#[web::delete("/user/{id}")]
-async fn delete_user_by_id(
+pub async fn delete_user_by_id<T>(
     data: web::types::State<Arc<AppState>>,
-    user_id: web::types::Path<i32>,
-) -> Result<web::HttpResponse, Error> {
+    user_query: web::types::Json<UserQuery>,
+) -> Result<web::HttpResponse, Error>
+where
+    T: Serialize + Send,
+{
     let mut conn = data
         .pool
         .get()
         .expect("couldn't get db connection from pool");
-    let deleted_user = web::block(move || user::delete_user_by_id(&mut conn, user_id.into_inner()))
-        .await
-        .map_err(|e| {
-            log::error!("Failed to delete user by id: {:?}", e);
-            web::Error::from(e)
-        })?;
+    let deleted_user = web::block(move || match user_query.into_inner() {
+        UserQuery::Id { id } => user::delete_user_by_id(&mut conn, id),
+        _ => Err(diesel::result::Error::DeserializationError(
+            "User id is required".into(),
+        )),
+    })
+    .await
+    .map_err(|e| {
+        log::error!("Failed to delete user by id: {:?}", e);
+        web::Error::from(e)
+    })?;
 
     Ok(web::HttpResponse::Ok().json(&Response::<&User> {
         status: "success".to_string(),

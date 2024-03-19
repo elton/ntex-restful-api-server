@@ -20,6 +20,9 @@ pub enum AppError {
     UserAlreadyExists(String),
 }
 
+// Implement the `std::error::Error` trait for `AppError`
+impl std::error::Error for AppError {}
+
 /// Ntex uses `ResponseError` for conversion of errors to a response
 impl WebResponseError for AppError {
     fn error_response(&self, _: &HttpRequest) -> HttpResponse {

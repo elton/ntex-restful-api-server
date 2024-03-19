@@ -1,3 +1,4 @@
+use ntex::http;
 use ntex::web::{self, Error};
 use serde::Serialize;
 
@@ -11,7 +12,6 @@ pub struct Response<T> {
 }
 
 /// health check
-#[web::get("/health")]
 async fn health() -> Result<web::HttpResponse, Error> {
     Ok(web::HttpResponse::Ok().json(&Response::<()> {
         status: "success".to_string(),
@@ -30,20 +30,33 @@ async fn not_found_error() -> Result<web::HttpResponse, Error> {
         data: None,
     }))
 }
+// A guard for checking if a user is authenticated
+struct AuthorizationHeader;
+
+impl web::guard::Guard for AuthorizationHeader {
+    fn check(&self, req: &http::RequestHead) -> bool {
+        req.headers().contains_key(http::header::AUTHORIZATION)
+    }
+}
 
 /// configure routes
 pub fn config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/v1")
-            .service(health)
-            .service(user::create_user)
-            .service(user::get_user_by_id)
-            .service(user::get_users_by_name)
-            .service(user::search_users)
-            .service(user::get_all_users)
-            .service(user::update_user_by_id)
-            .service(user::delete_user_by_id)
-            .service(user::user_login)
+            .guard(web::guard::Header("content-type", "application/json"))
+            .service((
+                web::resource("/health").route(web::get().to(health)),
+                web::resource("/users")
+                    .guard(AuthorizationHeader)
+                    .route(web::post().to(user::create_user))
+                    .route(web::get().to(user::get_user_by_id_or_name::<user::UserQuery>))
+                    .route(web::put().to(user::update_user_by_id))
+                    .route(web::delete().to(user::delete_user_by_id::<user::UserQuery>)),
+                web::resource("/users/search")
+                    .guard(AuthorizationHeader)
+                    .route(web::post().to(user::search_users)),
+                web::resource("/users/login").route(web::post().to(user::user_login)),
+            ))
             .default_service(web::route().to(not_found_error)),
     );
 }
