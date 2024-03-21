@@ -63,7 +63,7 @@ where
                         .ok()
                         .unwrap();
 
-                    // 4. Call the next service in the chain if the token exists in the Redis server and can be decoded to the user ID correctly.
+                    // 4. Call the next service in the chain if the token exists in the Redis server and can be **decoded** to the user ID correctly.
                     if jwt::get_user_id_from_redis(&mut conn, jwt::TokenType::AccessToken, &token)
                         .await
                         .map_err(|e| {
@@ -77,21 +77,24 @@ where
                         let res = ctx.call(&self.service, req).await?;
                         Ok(add_cors_header(res, "*"))
                     } else {
-                        log::info!("Invalid token");
-                        // If no token is found, redirect to the login page
-                        if req.path() == "/api/v1/users/login" {
-                            let res = ctx.call(&self.service, req).await?;
-                            Ok(add_cors_header(res, "*"))
-                        } else {
-                            let res = req.into_response(web::HttpResponse::Unauthorized().json(
-                                &Response::<()> {
-                                    status: "fail".to_string(),
-                                    message: "Invalid token".to_string(),
-                                    count: None,
-                                    data: None,
-                                },
-                            ));
-                            Ok(add_cors_header(res, "*"))
+                        log::error!("Invalid token");
+                        match req.path() {
+                            // refresh token should carry a access token even if it's expired
+                            "/api/v1/users/login" | "/api/v1/users/refresh" => {
+                                let res = ctx.call(&self.service, req).await?;
+                                Ok(add_cors_header(res, "*"))
+                            }
+                            _ => {
+                                let res = req.into_response(
+                                    web::HttpResponse::Unauthorized().json(&Response::<()> {
+                                        status: "fail".to_string(),
+                                        message: "Invalid token".to_string(),
+                                        count: None,
+                                        data: None,
+                                    }),
+                                );
+                                Ok(add_cors_header(res, "*"))
+                            }
                         }
                     }
                 // If no token is found, redirect to the login page

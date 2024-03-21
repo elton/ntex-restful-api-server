@@ -11,7 +11,7 @@ use base64::{engine::general_purpose, Engine as _};
 use dotenv::dotenv;
 use ulid::Ulid;
 
-use crate::AppState;
+use crate::{models::user, AppState};
 
 // 快速说明
 //
@@ -142,6 +142,7 @@ pub async fn get_user_id_from_redis(
     token: &str,
 ) -> Result<Option<usize>, Box<dyn std::error::Error>> {
     let token = token.replace("Bearer ", "");
+    // decode token and get user_id from redis
     if let Ok(claims) = decode_token(kind, token.as_str()) {
         let user_id = conn.get(claims.token_id).await?;
         Ok(Some(user_id))
@@ -150,6 +151,50 @@ pub async fn get_user_id_from_redis(
     }
 }
 
+/// refresh token
+pub async fn refresh_token(
+    data: &State<Arc<AppState>>,
+    refresh_token: &str,
+) -> Result<Token, Box<dyn std::error::Error>> {
+    let mut conn = data.redis_client.get_multiplexed_async_connection().await?;
+    // decode refresh token and get user_id from redis
+    if let Some(user_id) = get_user_id_from_redis(&mut conn, TokenType::RefreshToken, refresh_token)
+        .await
+        .map_err(|e| {
+            log::error!("Invalid refresh token: {}", e);
+            e
+        })?
+    {
+        // get user name from postgresql database
+        let mut conn = data
+            .pool
+            .get()
+            .expect("couldn't get db connection from pool");
+        let user = user::get_users_by_id(&mut conn, user_id as i32).map_err(|e| {
+            log::error!("Error getting user from db: {}", e);
+            e
+        })?;
+
+        if user.is_empty() {
+            return Err("Invalid refresh token".into());
+        }
+
+        let mut claims = Claims::new(&user[0].name, "pwr.ink");
+        let access_token = generate_token(TokenType::AccessToken, &mut claims)?;
+
+        let mut claims = Claims::new(&user[0].name, "pwr.ink");
+        let refresh_token = generate_token(TokenType::RefreshToken, &mut claims)?;
+
+        Ok(Token {
+            access_token,
+            refresh_token,
+        })
+    } else {
+        Err("Invalid token".into())
+    }
+}
+
+#[cfg(test)]
 #[test]
 fn test_jwt() {
     let mut claims = Claims::new("elton", "pwr.ink");

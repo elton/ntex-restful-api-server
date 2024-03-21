@@ -1,4 +1,5 @@
 use dotenv::dotenv;
+use futures::TryFutureExt;
 use ntex::http;
 use ntex::web::{self, Error};
 use serde::{Deserialize, Serialize};
@@ -106,7 +107,7 @@ pub async fn user_login(
 
     if let Some(user) = user {
         // if user is verified, generate jwt token
-        let mut claims = Claims::new(&user.email, "pwr.ink");
+        let mut claims = Claims::new(&user.name, "pwr.ink");
         let access_token = jwt::generate_token(jwt::TokenType::AccessToken, &mut claims);
         let refresh_token = jwt::generate_token(jwt::TokenType::RefreshToken, &mut claims);
         let token = jwt::Token {
@@ -175,6 +176,32 @@ pub async fn user_login(
         // if user is not verified, return unauthorized
         Err(AppError::Unauthorized)
     }
+}
+
+// refresh jwt token
+pub async fn refresh_token(
+    data: web::types::State<Arc<AppState>>,
+    refresh_token: web::types::Json<jwt::Token>,
+) -> Result<web::HttpResponse, AppError> {
+    // get refresh token from request
+    if (&refresh_token).refresh_token.is_empty() {
+        return Err(AppError::BadRequest(
+            "Refresh token is required".to_string(),
+        ));
+    }
+    let token = jwt::refresh_token(&data, &refresh_token.refresh_token.as_str())
+        .await
+        .map_err(|e| {
+            log::error!("Failed to refresh token: {:?}", e);
+            AppError::Unauthorized
+        })?;
+
+    Ok(web::HttpResponse::Ok().json(&Response::<jwt::Token> {
+        status: "success".to_string(),
+        message: "refresh token success".to_string(),
+        count: None,
+        data: Some(token),
+    }))
 }
 
 /// get a user by id or name
