@@ -4,6 +4,7 @@ use ntex::web::{self, Error};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::utils;
 use crate::{
     errors::AppError,
     handlers::Response,
@@ -129,6 +130,13 @@ pub async fn user_login(
             std::env::var("ACCESS_TOKEN_MAXAGE").expect("DATABASE_URL must be set");
         let refresh_token_max_age =
             std::env::var("REFRESH_TOKEN_MAXAGE").expect("DATABASE_URL must be set");
+
+        // store tokens in cookies
+        utils::cookie::store_cookie(
+            "access_token",
+            &token.access_token,
+            access_token_max_age.parse::<i64>().unwrap(),
+        );
 
         // save tokens data to redis with their expire time
         jwt::save_token_to_redis(

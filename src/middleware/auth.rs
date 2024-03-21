@@ -39,77 +39,80 @@ where
         req: WebRequest<Err>,
         ctx: ServiceCtx<'_, Self>,
     ) -> Result<Self::Response, Self::Error> {
-        // 1. Check the preflight request first, and set the CORS header correctly.
-        // Note: preflight request is a request with the OPTIONS method
-        if Method::OPTIONS == req.head().method {
-            let res = ctx.call(&self.service, req).await?;
-            Ok(add_cors_header(res, "*"))
-        } else {
-            // 2. After the preflight request, we can get the AUTHORIZATION header from the standard request.
-            if let Some(token) = req.headers().get(http::header::AUTHORIZATION) {
-                let token = token.to_str().unwrap().replace("Bearer ", "");
-                log::info!("token: {:?}", token);
+        match req.head().method {
+            // 1. Check the preflight request first, and set the CORS header correctly.
+            // Note: preflight request is a request with the OPTIONS method
+            Method::OPTIONS => {
+                let res = ctx.call(&self.service, req).await?;
+                return Ok(add_cors_header(res, "*"));
+            }
+            _ => {
+                // 2. After the preflight request, we can get the AUTHORIZATION header from the standard request.
+                if let Some(token) = req.headers().get(http::header::AUTHORIZATION) {
+                    let token = token.to_str().unwrap().replace("Bearer ", "");
+                    log::info!("token: {:?}", token);
 
-                // 3. Verify the token by checking the Redis server.
-                // Get a connection to the Redis server
-                let mut conn = repository::redis::new()
-                    .ok()
-                    .unwrap()
-                    .clone()
-                    .get_multiplexed_async_connection()
-                    .await
-                    .ok()
-                    .unwrap();
+                    // 3. Verify the token by checking the Redis server.
+                    // Get a connection to the Redis server
+                    let mut conn = repository::redis::new()
+                        .ok()
+                        .unwrap()
+                        .clone()
+                        .get_multiplexed_async_connection()
+                        .await
+                        .ok()
+                        .unwrap();
 
-                // 4. Call the next service in the chain if the token exists in the Redis server and can be decoded to the user ID correctly.
-                if let Some(user_id) =
-                    jwt::get_user_id_from_redis(&mut conn, jwt::TokenType::AccessToken, &token)
+                    // 4. Call the next service in the chain if the token exists in the Redis server and can be decoded to the user ID correctly.
+                    if jwt::get_user_id_from_redis(&mut conn, jwt::TokenType::AccessToken, &token)
                         .await
                         .map_err(|e| {
                             log::error!("Error getting user_id from redis: {}", e);
                             AppError::InternalServerError(e.to_string())
                         })
                         .ok()
-                {
-                    log::info!("user_id: {:?}", user_id);
-                    //if get user_id, Call the next service in the chain
-                    let res = ctx.call(&self.service, req).await?;
-                    Ok(add_cors_header(res, "*"))
+                        .is_some()
+                    {
+                        //if get user_id, Call the next service in the chain
+                        let res = ctx.call(&self.service, req).await?;
+                        Ok(add_cors_header(res, "*"))
+                    } else {
+                        log::info!("Invalid token");
+                        // If no token is found, redirect to the login page
+                        if req.path() == "/api/v1/users/login" {
+                            let res = ctx.call(&self.service, req).await?;
+                            Ok(add_cors_header(res, "*"))
+                        } else {
+                            let res = req.into_response(web::HttpResponse::Unauthorized().json(
+                                &Response::<()> {
+                                    status: "fail".to_string(),
+                                    message: "Invalid token".to_string(),
+                                    count: None,
+                                    data: None,
+                                },
+                            ));
+                            Ok(add_cors_header(res, "*"))
+                        }
+                    }
+                // If no token is found, redirect to the login page
                 } else {
-                    log::info!("Invalid token");
+                    log::error!("No token found");
                     // If no token is found, redirect to the login page
                     if req.path() == "/api/v1/users/login" {
                         let res = ctx.call(&self.service, req).await?;
                         Ok(add_cors_header(res, "*"))
                     } else {
-                        Ok(req.into_response(web::HttpResponse::BadRequest().json(
-                            &Response::<()> {
-                                status: "fail".to_string(),
-                                message: "Invalid token".to_string(),
-                                count: None,
-                                data: None,
-                            },
-                        )))
-                    }
-                }
-            // If no token is found, redirect to the login page
-            } else {
-                log::error!("No token found");
-                // If no token is found, redirect to the login page
-                if req.path() == "/api/v1/users/login" {
-                    let res = ctx.call(&self.service, req).await?;
-                    Ok(add_cors_header(res, "*"))
-                } else {
-                    Ok(
-                        req.into_response(web::HttpResponse::Unauthorized().json(
-                            &Response::<()> {
+                        let res =
+                            req.into_response(web::HttpResponse::Unauthorized().json(&Response::<
+                                (),
+                            > {
                                 status: "fail".to_string(),
                                 message: "No token found".to_string(),
                                 count: None,
                                 data: None,
-                            },
-                        )),
-                    )
+                            }));
+                        Ok(add_cors_header(res, "*"))
+                    }
                 }
             }
         }
