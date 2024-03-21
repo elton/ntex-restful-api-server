@@ -1,5 +1,4 @@
 use dotenv::dotenv;
-use futures::TryFutureExt;
 use ntex::http;
 use ntex::web::{self, Error};
 use serde::{Deserialize, Serialize};
