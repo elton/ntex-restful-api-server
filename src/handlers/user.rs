@@ -182,6 +182,10 @@ pub async fn refresh_token(
     data: web::types::State<Arc<AppState>>,
     refresh_token: web::types::Json<jwt::Token>,
 ) -> Result<web::HttpResponse, AppError> {
+    #[derive(Serialize)]
+    struct TokenResponse<'a> {
+        token: &'a jwt::Token,
+    }
     // get refresh token from request
     if (&refresh_token).refresh_token.is_empty() {
         return Err(AppError::BadRequest(
@@ -195,11 +199,11 @@ pub async fn refresh_token(
             AppError::Unauthorized
         })?;
 
-    Ok(web::HttpResponse::Ok().json(&Response::<jwt::Token> {
+    Ok(web::HttpResponse::Ok().json(&Response::<TokenResponse> {
         status: "success".to_string(),
         message: "refresh token success".to_string(),
         count: None,
-        data: Some(token),
+        data: Some(TokenResponse { token: &token }),
     }))
 }
 

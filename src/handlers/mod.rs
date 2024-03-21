@@ -55,9 +55,10 @@ pub fn config(cfg: &mut web::ServiceConfig) {
                 web::resource("/users/search")
                     .guard(AuthorizationHeader)
                     .route(web::post().to(user::search_users)),
-                web::resource("/users/login").route(web::post().to(user::user_login)),
+                web::resource("/auth/login").route(web::post().to(user::user_login)),
+                web::resource("/auth/register").route(web::post().to(user::create_user)),
                 // refresh token should carry a access token even if it's expired
-                web::resource("/users/refresh")
+                web::resource("/auth/refresh_token")
                     .guard(AuthorizationHeader)
                     .route(web::post().to(user::refresh_token)),
             ))

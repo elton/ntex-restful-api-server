@@ -79,8 +79,10 @@ where
                     } else {
                         log::error!("Invalid token");
                         match req.path() {
-                            // refresh token should carry a access token even if it's expired
-                            "/api/v1/users/login" | "/api/v1/users/refresh" => {
+                            // logout and refresh token should carry a access token even if it's expired
+                            "/api/v1/auth/login"
+                            | "/api/v1/auth/logout"
+                            | "/api/v1/auth/refresh_token" => {
                                 let res = ctx.call(&self.service, req).await?;
                                 Ok(add_cors_header(res, "*"))
                             }
@@ -101,20 +103,22 @@ where
                 } else {
                     log::error!("No token found");
                     // If no token is found, redirect to the login page
-                    if req.path() == "/api/v1/users/login" {
-                        let res = ctx.call(&self.service, req).await?;
-                        Ok(add_cors_header(res, "*"))
-                    } else {
-                        let res =
-                            req.into_response(web::HttpResponse::Unauthorized().json(&Response::<
-                                (),
-                            > {
-                                status: "fail".to_string(),
-                                message: "No token found".to_string(),
-                                count: None,
-                                data: None,
-                            }));
-                        Ok(add_cors_header(res, "*"))
+                    match req.path() {
+                        "/api/v1/auth/login" | "/api/v1/auth/register" => {
+                            let res = ctx.call(&self.service, req).await?;
+                            Ok(add_cors_header(res, "*"))
+                        }
+                        _ => {
+                            let res = req.into_response(web::HttpResponse::Unauthorized().json(
+                                &Response::<()> {
+                                    status: "fail".to_string(),
+                                    message: "No token found".to_string(),
+                                    count: None,
+                                    data: None,
+                                },
+                            ));
+                            Ok(add_cors_header(res, "*"))
+                        }
                     }
                 }
             }
