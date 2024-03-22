@@ -4,7 +4,6 @@ use ntex::web::{self, Error};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::utils;
 use crate::{
     errors::AppError,
     handlers::Response,

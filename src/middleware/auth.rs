@@ -1,4 +1,3 @@
-use ntex::http::header::CONTENT_LANGUAGE;
 use ntex::http::Method;
 use ntex::service::{Middleware, Service, ServiceCtx};
 use ntex::web::{Error, ErrorRenderer, WebRequest, WebResponse};
