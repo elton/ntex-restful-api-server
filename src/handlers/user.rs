@@ -173,19 +173,26 @@ pub async fn user_login(
 // refresh jwt token
 pub async fn refresh_token(
     data: web::types::State<Arc<AppState>>,
-    refresh_token: web::types::Json<jwt::Token>,
+    req: ntex::web::HttpRequest,
 ) -> Result<web::HttpResponse, AppError> {
     #[derive(Serialize)]
     struct TokenResponse<'a> {
         token: &'a jwt::Token,
     }
     // get refresh token from request
-    if (&refresh_token).refresh_token.is_empty() {
-        return Err(AppError::BadRequest(
-            "Refresh token is required".to_string(),
-        ));
-    }
-    let token = jwt::refresh_token(&data, &refresh_token.refresh_token.as_str())
+    // get headers from request
+    let headers = req
+        .headers()
+        // get the authorization header from the request, which contains the jwt token.
+        // This is the same as `.get("Authorization")`
+        .get(http::header::AUTHORIZATION)
+        .unwrap()
+        .to_str()
+        .unwrap();
+
+    let refresh_token = headers.replace("Bearer ", "");
+
+    let token = jwt::refresh_token(&data, &refresh_token.as_str())
         .await
         .map_err(|e| {
             log::error!("Failed to refresh token: {:?}", e);
