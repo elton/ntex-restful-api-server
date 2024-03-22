@@ -131,6 +131,17 @@ pub async fn save_token_to_redis(
     Ok(())
 }
 
+// delete a jwt token from redis
+pub async fn delete_token_from_redis(
+    data: &State<Arc<AppState>>,
+    token_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut redis_client = data.redis_client.get_multiplexed_async_connection().await?;
+
+    redis_client.del(token_id).await?;
+    Ok(())
+}
+
 /// get user_id from redis by jwt token
 /// kind is the type of token, it can be AccessToken or RefreshToken
 /// token is the jwt token
@@ -183,6 +194,16 @@ pub async fn refresh_token(
             return Err("Invalid refresh token".into());
         }
 
+        // delete old refresh token from redis
+        let claims = decode_token(TokenType::RefreshToken, refresh_token)?;
+        delete_token_from_redis(&data, claims.token_id.as_str())
+            .await
+            .map_err(|e| {
+                log::error!("Failed to delete refresh token: {:?}", e);
+                e
+            })?;
+
+        // generate new tokens
         let access_claims = Claims::new(&user[0].name, "pwr.ink");
         let access_token = generate_token(TokenType::AccessToken, &access_claims)?;
 
@@ -194,30 +215,26 @@ pub async fn refresh_token(
             std::env::var("ACCESS_TOKEN_MAXAGE").expect("DATABASE_URL must be set");
         let refresh_token_max_age =
             std::env::var("REFRESH_TOKEN_MAXAGE").expect("DATABASE_URL must be set");
+        let tokens = vec![
+            (
+                access_claims.token_id.as_str(),
+                access_token_max_age.parse::<u64>().unwrap() * 60,
+            ),
+            (
+                refresh_claims.token_id.as_str(),
+                refresh_token_max_age.parse::<u64>().unwrap() * 60,
+            ),
+        ];
 
         // save new tokens to redis
-        save_token_to_redis(
-            &data,
-            access_claims.token_id.as_str(),
-            user_id as usize,
-            access_token_max_age.parse::<u64>().unwrap() * 60,
-        )
-        .await
-        .map_err(|e| {
-            log::error!("Failed to save access_token: {:?}", e);
-            e
-        })?;
-        save_token_to_redis(
-            &data,
-            refresh_claims.token_id.as_str(),
-            user_id as usize,
-            refresh_token_max_age.parse::<u64>().unwrap() * 60,
-        )
-        .await
-        .map_err(|e| {
-            log::error!("Failed to save refresh_token: {:?}", e);
-            e
-        })?;
+        for (token_id, max_age) in tokens {
+            save_token_to_redis(&data, token_id, user_id, max_age)
+                .await
+                .map_err(|e| {
+                    log::error!("Failed to save token: {:?}", e);
+                    e
+                })?;
+        }
 
         Ok(Token {
             access_token,

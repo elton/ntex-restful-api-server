@@ -179,7 +179,7 @@ pub async fn refresh_token(
     struct TokenResponse<'a> {
         token: &'a jwt::Token,
     }
-    // get refresh token from request
+
     // get headers from request
     let headers = req
         .headers()
