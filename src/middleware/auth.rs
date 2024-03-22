@@ -1,3 +1,4 @@
+use ntex::http::header::CONTENT_LANGUAGE;
 use ntex::http::Method;
 use ntex::service::{Middleware, Service, ServiceCtx};
 use ntex::web::{Error, ErrorRenderer, WebRequest, WebResponse};
@@ -47,6 +48,12 @@ where
                 return Ok(add_cors_header(res, "*"));
             }
             _ => {
+                // skip the auth check, if the request is for the refresh_token endpoint
+                if req.path() == "/api/v1/auth/refresh_token" {
+                    log::info!("enter refresh_token endpoint");
+                    let res = ctx.call(&self.service, req).await?;
+                    return Ok(add_cors_header(res, "*"));
+                }
                 // 2. After the preflight request, we can get the AUTHORIZATION header from the standard request.
                 if let Some(token) = req.headers().get(http::header::AUTHORIZATION) {
                     let token = token.to_str().unwrap().replace("Bearer ", "");
@@ -68,7 +75,7 @@ where
                         .await
                         .map_err(|e| {
                             log::error!("Error getting user_id from redis: {}", e);
-                            AppError::InternalServerError(e.to_string())
+                            AppError::Unauthorized
                         })
                         .ok()
                         .is_some()

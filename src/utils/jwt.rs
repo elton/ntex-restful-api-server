@@ -51,7 +51,7 @@ impl Claims {
             .unwrap();
 
         Self {
-            token_id: "".to_string(),
+            token_id: Ulid::new().to_string(),
             iss: iss.to_owned(),
             sub: sub.to_owned(),
             iat,
@@ -60,7 +60,7 @@ impl Claims {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Token {
     pub access_token: String,
     pub refresh_token: String,
@@ -68,7 +68,7 @@ pub struct Token {
 
 pub fn generate_token(
     kind: TokenType,
-    claims: &mut Claims,
+    claims: &Claims,
 ) -> Result<String, jsonwebtoken::errors::Error> {
     dotenv().ok();
     let private_key = match kind {
@@ -83,7 +83,6 @@ pub fn generate_token(
 
     let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
 
-    claims.token_id = Ulid::new().to_string();
     let token = encode(
         &header,
         &claims,
@@ -144,7 +143,11 @@ pub async fn get_user_id_from_redis(
     let token = token.replace("Bearer ", "");
     // decode token and get user_id from redis
     if let Ok(claims) = decode_token(kind, token.as_str()) {
-        let user_id = conn.get(claims.token_id).await?;
+        log::info!("claims in get_user_id_from_redis: {:?}", claims);
+        let user_id = conn.get(claims.token_id).await.map_err(|e| {
+            log::error!("Invalid token, no record in Redis: {}", e);
+            e
+        })?;
         Ok(Some(user_id))
     } else {
         Err("Invalid token".into())
@@ -156,6 +159,7 @@ pub async fn refresh_token(
     data: &State<Arc<AppState>>,
     refresh_token: &str,
 ) -> Result<Token, Box<dyn std::error::Error>> {
+    log::info!("refresh token in fn refresh_token: {}", refresh_token);
     let mut conn = data.redis_client.get_multiplexed_async_connection().await?;
     // decode refresh token and get user_id from redis
     if let Some(user_id) = get_user_id_from_redis(&mut conn, TokenType::RefreshToken, refresh_token)
@@ -179,11 +183,41 @@ pub async fn refresh_token(
             return Err("Invalid refresh token".into());
         }
 
-        let mut claims = Claims::new(&user[0].name, "pwr.ink");
-        let access_token = generate_token(TokenType::AccessToken, &mut claims)?;
+        let access_claims = Claims::new(&user[0].name, "pwr.ink");
+        let access_token = generate_token(TokenType::AccessToken, &access_claims)?;
 
-        let mut claims = Claims::new(&user[0].name, "pwr.ink");
-        let refresh_token = generate_token(TokenType::RefreshToken, &mut claims)?;
+        let refresh_claims = Claims::new(&user[0].name, "pwr.ink");
+        let refresh_token = generate_token(TokenType::RefreshToken, &refresh_claims)?;
+
+        dotenv().ok();
+        let access_token_max_age =
+            std::env::var("ACCESS_TOKEN_MAXAGE").expect("DATABASE_URL must be set");
+        let refresh_token_max_age =
+            std::env::var("REFRESH_TOKEN_MAXAGE").expect("DATABASE_URL must be set");
+
+        // save new tokens to redis
+        save_token_to_redis(
+            &data,
+            access_claims.token_id.as_str(),
+            user_id as usize,
+            access_token_max_age.parse::<u64>().unwrap() * 60,
+        )
+        .await
+        .map_err(|e| {
+            log::error!("Failed to save access_token: {:?}", e);
+            e
+        })?;
+        save_token_to_redis(
+            &data,
+            refresh_claims.token_id.as_str(),
+            user_id as usize,
+            refresh_token_max_age.parse::<u64>().unwrap() * 60,
+        )
+        .await
+        .map_err(|e| {
+            log::error!("Failed to save refresh_token: {:?}", e);
+            e
+        })?;
 
         Ok(Token {
             access_token,
@@ -212,4 +246,12 @@ fn test_jwt() {
     println!("claims: {:?}", claims);
 
     assert_eq!(claims.iss, "refresh_claims");
+}
+
+#[test]
+fn test_decode_token() {
+    let refresh_token ="eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJ0b2tlbl9pZCI6IjAxSFNKQVJLWERBSDIzWjhTRjZaWTQ3NVRWIiwiaXNzIjoicHdyLmluayIsInN1YiI6IkVsdG9uIFpoZW5nIiwiaWF0IjoxNzExMDg1OTk3LCJleHAiOjE3MTEwODk1OTd9.dNaWF0NQfqyz58MW_YJEI5f3CFQNhh-jAKXCXht7IDUrXvKOfDezJoBpWUR7vF8bcWV--Ak1KSkemaqSVYuRJX9TBWzXTS_y5_42Q2F_HdJ8RZPycEDDQrCjHY-koGgSHMwRdyqDhzA1Z5ErtVdShxI5RVQd2WYjBPKlSE_dhpcWBJpI7x3VqrHh2QsDifebtfvVNAgzHKQe03YNdQc4EI6Xfeq8zVnOUak7Een5wdiRE_LdKaCYF7mgCIESS6pV8C-drCr6kpC8ovONIhESEy5G8FvjB-xH8vPegg7P0V54gT0-Bb0JoNlxGT0FHHZmQvPPHRS7WC7kGAP-xKp00PkRAbk9MPmdHzU7clmSLKByqBazfPh9jOiyIyNmOIpiqNKDPCqkxpKCbyZMlAr7dGz1odDDsKNJuJDhnayB7fujkEIkIW6AmWxs_A8eslJvFmXRU3zBNdQyPDKQUvId2v6b70OkndOpEn3_PUg8N0T20zkYKDGGf_CG_rdPAU4_1oZAHShArIb5AfZvlyujEIOHfiOdw9Q_CgGyiEefe8ORFX44uj-1SE08DDpEpBQk3_kZEnmfCqqgMFkb931bp9gMo0Wib2JBIxY1_saOywrTCRUFhARavW6cifgj_rK9w4SMHSUT-sFH25keKEVLi5wKu8KvdruTSW3bUx4kls8";
+    let claims = decode_token(TokenType::RefreshToken, refresh_token).unwrap();
+    println!("claims: {:?}", claims);
+    assert_eq!(claims.sub, "Elton Zheng");
 }

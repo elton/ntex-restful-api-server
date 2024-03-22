@@ -101,17 +101,20 @@ pub async fn user_login(
         .await
         .map_err(|e| {
             log::error!("Failed to verify user: {:?}", e);
-            AppError::BadRequest(e.to_string())
+            AppError::Unauthorized
         })?;
 
     if let Some(user) = user {
         // if user is verified, generate jwt token
-        let mut claims = Claims::new(&user.name, "pwr.ink");
-        let access_token = jwt::generate_token(jwt::TokenType::AccessToken, &mut claims);
-        let refresh_token = jwt::generate_token(jwt::TokenType::RefreshToken, &mut claims);
+        let access_claims = Claims::new(&user.name, "pwr.ink");
+        let access_token =
+            jwt::generate_token(jwt::TokenType::AccessToken, &access_claims).unwrap();
+        let refresh_claims = Claims::new(&user.name, "pwr.ink");
+        let refresh_token =
+            jwt::generate_token(jwt::TokenType::RefreshToken, &refresh_claims).unwrap();
         let token = jwt::Token {
-            access_token: access_token.unwrap(),
-            refresh_token: refresh_token.unwrap(),
+            access_token,
+            refresh_token,
         };
 
         #[derive(Serialize)]
@@ -120,24 +123,13 @@ pub async fn user_login(
             token: &'a jwt::Token,
         }
 
-        let access_claims =
-            jwt::decode_token(jwt::TokenType::AccessToken, token.access_token.as_str()).unwrap();
-        let refresh_claims =
-            jwt::decode_token(jwt::TokenType::RefreshToken, token.refresh_token.as_str()).unwrap();
-
         dotenv().ok();
         let access_token_max_age =
             std::env::var("ACCESS_TOKEN_MAXAGE").expect("DATABASE_URL must be set");
         let refresh_token_max_age =
             std::env::var("REFRESH_TOKEN_MAXAGE").expect("DATABASE_URL must be set");
-
-        // store tokens in cookies
-        utils::cookie::store_cookie(
-            "access_token",
-            &token.access_token,
-            access_token_max_age.parse::<i64>().unwrap(),
-        );
-
+        log::info!("access_claims: {:?}", access_claims);
+        log::info!("refresh_claims: {:?}", refresh_claims);
         // save tokens data to redis with their expire time
         jwt::save_token_to_redis(
             &data,
@@ -161,6 +153,8 @@ pub async fn user_login(
             log::error!("Failed to save refresh_token: {:?}", e);
             AppError::BadRequest(e.to_string())
         })?;
+
+        log::info!("token: {:?}", &token);
 
         Ok(web::HttpResponse::Ok().json(&Response::<LoginResponse> {
             status: "success".to_string(),
