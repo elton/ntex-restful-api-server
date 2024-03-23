@@ -191,6 +191,10 @@ pub async fn refresh_token(
         .unwrap();
 
     let refresh_token = headers.replace("Bearer ", "");
+    log::info!(
+        "refresh_token in refresh token handler: {:?}",
+        &refresh_token
+    );
 
     let token = jwt::refresh_token(&data, &refresh_token.as_str())
         .await

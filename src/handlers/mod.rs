@@ -43,7 +43,6 @@ impl web::guard::Guard for AuthorizationHeader {
 pub fn config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/v1")
-            .guard(web::guard::Header("content-type", "application/json"))
             .service((
                 web::resource("/health").route(web::get().to(health)),
                 web::resource("/users")
@@ -60,7 +59,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
                 web::resource("/auth/refresh_token")
                     // refresh token should carry a refresh token
                     .guard(AuthorizationHeader)
-                    .route(web::post().to(user::refresh_token)),
+                    .route(web::get().to(user::refresh_token)),
             ))
             .default_service(web::route().to(not_found_error)),
     );
