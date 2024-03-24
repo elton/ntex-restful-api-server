@@ -48,10 +48,16 @@ where
             }
             _ => {
                 // skip the auth check, if the request is for the refresh_token endpoint
-                if req.path() == "/api/v1/auth/refresh_token" {
-                    log::info!("enter refresh_token endpoint");
-                    let res = ctx.call(&self.service, req).await?;
-                    return Ok(add_cors_header(res, "*"));
+                match req.path() {
+                    "/api/v1/auth/refresh_token" | "/api/v1/health" => {
+                        log::info!("enter refresh_token endpoint");
+                        let res = ctx.call(&self.service, req).await?;
+                        return Ok(add_cors_header(res, "*"));
+                    }
+                    _ => {
+                        // Add a wildcard pattern to cover all other cases
+                        // Do nothing and continue to the next middleware/service
+                    }
                 }
                 // 2. After the preflight request, we can get the AUTHORIZATION header from the standard request.
                 if let Some(token) = req.headers().get(http::header::AUTHORIZATION) {
@@ -88,7 +94,8 @@ where
                             // logout and refresh token should carry a access token even if it's expired
                             "/api/v1/auth/login"
                             | "/api/v1/auth/logout"
-                            | "/api/v1/auth/refresh_token" => {
+                            | "/api/v1/auth/refresh_token"
+                            | "/api/v1/health" => {
                                 let res = ctx.call(&self.service, req).await?;
                                 Ok(add_cors_header(res, "*"))
                             }

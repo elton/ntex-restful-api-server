@@ -7,6 +7,7 @@ mod utils;
 
 use std::sync::Arc;
 
+use dotenv::dotenv;
 use ntex::web::{self};
 use ntex_cors::Cors;
 
@@ -20,6 +21,12 @@ async fn main() -> std::io::Result<()> {
     // enable logger
     std::env::set_var("RUST_LOG", "ntex=info,diesel=debug");
     env_logger::init();
+
+    dotenv().ok();
+    let app_port = std::env::var("PORT")
+        .expect("PORT must be set")
+        .parse::<u16>()
+        .unwrap();
 
     // set up database connection pool
     let pool = match repository::database::new() {
@@ -67,7 +74,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::auth::Auth)
             .configure(handlers::config)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", app_port))?
     .run()
     .await
 }

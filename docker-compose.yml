@@ -1,21 +1,18 @@
-version: '3'
+# When you run docker compose up, the following happens:
+# 1. network called myapp_default is created.
+# 2. container is created using ntex's configuration. It joins the network myapp_default under the name ntex.
+# 3. container is created using postgres's configuration. It joins the network myapp_default under the name postgres.
+
 services:
-  postgres:
+  db:
     image: postgres:latest
-    container_name: postgres
+    container_name: db
     ports:
       - '5432:5432'
     volumes:
       - progresDB:/var/lib/postgresql/data
     env_file:
       - ./.env
-  pgAdmin:
-    image: dpage/pgadmin4
-    container_name: pgAdmin
-    env_file:
-      - ./.env
-    ports:
-      - '5050:80'
   redis:
     image: redis:alpine
     container_name: redis
@@ -23,6 +20,21 @@ services:
       - '6379:6379'
     volumes:
       - redisDB:/data
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: api-server
+    ports:
+      - '8000:8000'
+    volumes:
+      - server:/app
+    env_file:
+      - ./.env
+    depends_on:
+      - db
+      - redis
 volumes:
   progresDB:
   redisDB:
+  server:
