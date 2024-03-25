@@ -1,5 +1,5 @@
 -- Your SQL goes here
-CREATE TABLE "users" (
+CREATE TABLE "pwr"."users" (
   id SERIAL PRIMARY KEY,
   name VARCHAR(128) NOT NULL,
   email VARCHAR NOT NULL UNIQUE,
@@ -10,4 +10,4 @@ CREATE TABLE "users" (
   modified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   deleted_at TIMESTAMP
 );
-CREATE INDEX "users_email_index" ON "users" (email)
+CREATE UNIQUE INDEX "users_email_index" ON "pwr"."users" (email)
