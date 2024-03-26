@@ -2,7 +2,7 @@
 name = "ntex-restful-api-server"
 description = "A demo app for ntex restful api server."
 authors = ["Elton Zheng <elton.zheng@me.com>"]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
