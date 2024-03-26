@@ -5,11 +5,10 @@ mod models;
 mod repository;
 mod utils;
 
-use std::sync::Arc;
-
 use dotenv::dotenv;
 use ntex::web::{self};
 use ntex_cors::Cors;
+use std::sync::Arc;
 
 pub struct AppState {
     pool: repository::database::DbPool,
@@ -22,9 +21,10 @@ async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "ntex=info,diesel=debug");
     env_logger::init();
 
+    // load environment variables from os
     dotenv().ok();
-    let app_port = std::env::var("PORT")
-        .expect("PORT must be set")
+    let app_port = (std::env::var("PORT").ok())
+        .unwrap_or("8000".to_string())
         .parse::<u16>()
         .unwrap();
 
