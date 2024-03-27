@@ -44,9 +44,6 @@ jobs:
           name: api-server-binary
           path: distfiles
 
-      - name: Display structure of downloaded files
-        run: ls -R distfiles
-
       # - name: Stop backend service
       #   uses: appleboy/ssh-action@master
       #   with:
@@ -69,12 +66,14 @@ jobs:
           target: '/root/PWR/api-server'
           strip_components: 1
 
-      # - name: Start backend service
-      #   uses: appleboy/ssh-action@master
-      #   with:
-      #     host: ${{ secrets.HOST }}
-      #     username: ${{ secrets.USER }}
-      #     key: ${{ secrets.SSH_PRIVATE_KEY }}
-      #     port: ${{ secrets.PORT }}
-      #     script: |
-      #       /root/start.sh
+      - name: Start API server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd /root/PWR/api-server
+            chmod +x ${env.BINARY_NAME}
+            nohup SERVER_PORT=${{SERVER_PORT}} DATABASE_URL=${{DATABASE_URL}} REDIS_URL=${{REDIS_URL}} ./${env.BINARY_NAME} > /dev/null 2>&1 &

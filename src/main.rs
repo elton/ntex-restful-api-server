@@ -23,7 +23,7 @@ async fn main() -> std::io::Result<()> {
 
     // load environment variables from os
     dotenv().ok();
-    let app_port = (std::env::var("PORT").ok())
+    let app_port = (std::env::var("SERVER_PORT").ok())
         .unwrap_or("8000".to_string())
         .parse::<u16>()
         .unwrap();
