@@ -82,4 +82,4 @@ jobs:
           script: |
             cd /root/PWR/api-server
             chmod +x $BINARY_NAME
-            nohup $SERVER_PORT $DATABASE_URL $REDIS_URL ./$BINARY_NAME > /dev/null 2>&1 &
+            nohup $SERVER_PORT $DATABASE_URL $REDIS_URL ./$BINARY_NAME > output.log 2>&1 &
