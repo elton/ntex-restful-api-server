@@ -42,9 +42,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: api-server-binary
+          path: distfiles
 
       - name: Display structure of downloaded files
-        run: ls -R
+        run: ls -R distfiles
 
       # - name: Stop backend service
       #   uses: appleboy/ssh-action@master
@@ -64,8 +65,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.PORT }}
           rm: true
-          source: './artifacts/${{ env.BINARY_NAME }}'
-          target: '/root/PWR'
+          source: 'distfiles/${{ env.BINARY_NAME }}'
+          target: '/root/PWR/api-server'
           strip_components: 1
 
       # - name: Start backend service
