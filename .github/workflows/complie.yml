@@ -88,8 +88,5 @@ jobs:
           script: |
             cd /root/PWR/api-server
             chmod +x $BINARY_NAME
-            echo $BINARY_NAME
-            echo $SERVER_PORT
-            echo $DATABASE_URL
-            echo $REDIS_URL
+            echo "SERVER_PORT=$SERVER_PORT DATABASE_URL=$DATABASE_URL REDIS_URL=$REDIS_URL">.env 
             SERVER_PORT=$SERVER_PORT DATABASE_URL=$DATABASE_URL REDIS_URL=$REDIS_URL nohup ./$BINARY_NAME > output.log 2>&1 &
