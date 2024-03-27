@@ -52,18 +52,14 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.PORT }}
           script: |
-            if pgrep -f "ntex-restful-api-server" > /dev/null
-            then
-              echo "Process found. Terminating..."
-              pkill -f "ntex-restful-api-server"
-              # Check if the process was terminated with signal TERM
-              # if [ $? -eq 143 ]; then
-              #   echo "Process terminated with signal TERM, continuing with exit code 0."
+            if pgrep -f ${{ env.BINARY_NAME }} > /dev/null; then
+                kill -INT $(pgrep -f ${{ env.BINARY_NAME }})
+                echo "${{ env.BINARY_NAME }} process terminated"
                 
-              # fi
-              exit 0
+                # 等待 2 秒
+                sleep 2
             else
-              echo "Process not found. Continuing..."
+                echo "${{ env.BINARY_NAME }} process not found"
             fi
 
       - name: copy file via ssh key
