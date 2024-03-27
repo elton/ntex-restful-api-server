@@ -53,9 +53,9 @@ jobs:
           port: ${{ secrets.PORT }}
           script: |
             if pgrep -f ${{ env.BINARY_NAME }} > /dev/null; then
-                kill -INT $(pgrep -f ${{ env.BINARY_NAME }})
+                kill -INT $(pgrep -f ${{ env.BINARY_NAME }}) || true
                 echo "${{ env.BINARY_NAME }} process terminated"
-                
+
                 # 等待 2 秒
                 sleep 2
             else
