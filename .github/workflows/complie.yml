@@ -52,7 +52,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.PORT }}
           script: |
-            if pgrep -x "ntex-restful-api-server" > /dev/null
+            if pgrep -f "ntex-restful-api-server" > /dev/null
             then
               echo "Process found. Terminating..."
               pkill -f "ntex-restful-api-server"
