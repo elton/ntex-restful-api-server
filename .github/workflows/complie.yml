@@ -53,11 +53,11 @@ jobs:
           port: ${{ secrets.PORT }}
           script: |
             # 函数用于捕获并忽略 INT 信号
-            # trap '' INT
+            trap '' INT
 
             if pgrep -f ${{ env.BINARY_NAME }} > /dev/null; then
                 # 优雅关闭进程
-                kill -INT $(pgrep -f ${{ env.BINARY_NAME }}) > /dev/null
+                kill -INT $(pgrep -f ${{ env.BINARY_NAME }})
                 echo "${{ env.BINARY_NAME }} process terminated"
 
                 # 等待 2 秒
