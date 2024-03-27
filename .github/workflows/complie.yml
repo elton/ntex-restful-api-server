@@ -52,7 +52,13 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.PORT }}
           script: |
-            pgrep -f ${{ env.BINARY_NAME }} >/dev/null && pkill -f ${{ env.BINARY_NAME }} || echo "进程未运行"
+            if pgrep -x ${{ env.BINARY_NAME }} > /dev/null
+            then
+              echo "Process found. Terminating..."
+              pkill -f ${{ env.BINARY_NAME }}
+            else
+              echo "Process not found. Continuing..."
+            fi
 
       - name: copy file via ssh key
         uses: appleboy/scp-action@master
