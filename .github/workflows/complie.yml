@@ -69,6 +69,7 @@ jobs:
       - name: Start API server
         uses: appleboy/ssh-action@master
         env:
+          BINARY_NAME: ${{ env.BINARY_NAME }}
           SERVER_PORT: ${{ secrets.SERVER_PORT }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
@@ -77,8 +78,8 @@ jobs:
           username: ${{ secrets.USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.PORT }}
-          envs: SERVER_PORT,DATABASE_URL,REDIS_URL
+          envs: BINARY_NAME,SERVER_PORT,DATABASE_URL,REDIS_URL
           script: |
             cd /root/PWR/api-server
-            chmod +x ${env.BINARY_NAME}
-            nohup $SERVER_PORT $DATABASE_URL $REDIS_URL ./${env.BINARY_NAME} > /dev/null 2>&1 &
+            chmod +x $BINARY_NAME
+            nohup $SERVER_PORT $DATABASE_URL $REDIS_URL ./$BINARY_NAME > /dev/null 2>&1 &
