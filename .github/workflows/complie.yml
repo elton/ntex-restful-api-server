@@ -52,10 +52,16 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.PORT }}
           script: |
-            if pgrep -f ${{ env.BINARY_NAME }} > /dev/null
+            if pgrep -x "ntex-restful-api-server" > /dev/null
             then
               echo "Process found. Terminating..."
-              pkill -f ${{ env.BINARY_NAME }}
+              pkill -f "ntex-restful-api-server"
+              # Check if the process was terminated with signal TERM
+              # if [ $? -eq 143 ]; then
+              #   echo "Process terminated with signal TERM, continuing with exit code 0."
+                
+              # fi
+              exit 0
             else
               echo "Process not found. Continuing..."
             fi
