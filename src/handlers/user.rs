@@ -1,4 +1,4 @@
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use ntex::http;
 use ntex::web::{self, Error};
 use serde::{Deserialize, Serialize};

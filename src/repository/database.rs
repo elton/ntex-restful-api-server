@@ -1,7 +1,7 @@
 use ::r2d2::Error;
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
-use dotenv::dotenv;
+use dotenvy::dotenv;
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 

@@ -9,7 +9,6 @@ This is a simple Restful API server building with `Ntex` web framework. It provi
 - [Rust](https://www.rust-lang.org/)
 - [Ntex web framework](https://ntex.rs/)
 - [PostgreSQL](https://www.postgresql.org/)
-- [Docker](https://www.docker.com/)
 - [JWT](https://jwt.io/)
 
 ## Design

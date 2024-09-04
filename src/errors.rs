@@ -4,19 +4,19 @@ use ntex::web::{HttpRequest, HttpResponse, WebResponseError};
 
 #[derive(Debug, Display)]
 pub enum AppError {
-    #[display(fmt = "Internal Server Error")]
+    #[display("Internal Server Error")]
     InternalServerError(String),
-    #[display(fmt = "Bad Request: {}", _0)]
+    #[display("Bad Request: {}", _0)]
     BadRequest(String),
-    #[display(fmt = "Unauthorized")]
+    #[display("Unauthorized")]
     Unauthorized,
-    #[display(fmt = "Not Found")]
+    #[display("Not Found")]
     NotFound,
-    #[display(fmt = "Conflict")]
+    #[display("Conflict")]
     Conflict,
-    #[display(fmt = "Service Unavailable")]
+    #[display("Service Unavailable")]
     ServiceUnavailable,
-    #[display(fmt = "User Already Exists")]
+    #[display("User Already Exists")]
     UserAlreadyExists(String),
 }
 

@@ -16,8 +16,10 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 env_logger = "0.11"
 log = "0.4"
-derive_more = "1"
-dotenv = "0.15"
+derive_more = { version = "1", features = ["full"] }
+# The dotenv crate itself appears abandoned as of December 2021 so we now use the dotenvy crate instead. The file format is the same.
+dotenvy = "0.15"
+time = "0.3.36"
 
 diesel = { version = "2.2", features = ["postgres", "r2d2", "chrono"] }
 r2d2 = "0.8"

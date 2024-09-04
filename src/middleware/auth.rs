@@ -8,6 +8,10 @@ use crate::handlers::Response;
 use crate::repository;
 use crate::utils::jwt;
 
+// There are two steps in middleware processing.
+// 1. Middleware initialization, middleware factory gets called with
+//    next service in chain as parameter.
+// 2. Middleware's call method gets called with normal request.
 pub struct Auth;
 
 impl<S> Middleware<S> for Auth {
@@ -31,8 +35,8 @@ where
     type Response = WebResponse;
     type Error = Error;
 
-    ntex::forward_poll_ready!(service);
-    ntex::forward_poll_shutdown!(service);
+    ntex::forward_ready!(service);
+    // ntex::forward_poll_shutdown!(service);
 
     async fn call(
         &self,

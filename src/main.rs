@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 mod errors;
 mod handlers;
 mod middleware;
@@ -5,7 +7,7 @@ mod models;
 mod repository;
 mod utils;
 
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use ntex::web::{self};
 use ntex_cors::Cors;
 use std::sync::Arc;

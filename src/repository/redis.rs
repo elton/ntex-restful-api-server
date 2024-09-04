@@ -1,4 +1,4 @@
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use redis::{Client, RedisError};
 
 pub fn new() -> Result<redis::Client, RedisError> {

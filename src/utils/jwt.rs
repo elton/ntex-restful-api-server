@@ -8,7 +8,7 @@ use redis::{aio::MultiplexedConnection, AsyncCommands};
 use serde::{Deserialize, Serialize};
 
 use base64::{engine::general_purpose, Engine as _};
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use ulid::Ulid;
 
 use crate::{models::user, AppState};
