@@ -9,22 +9,22 @@ edition = "2021"
 
 [dependencies]
 futures = "0.3"
-ntex = { version = "1.2", features = ["tokio", "compress"] }
-ntex-cors = "1.0"
+ntex = { version = "2", features = ["tokio", "compress"] }
+ntex-cors = "2"
 
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1"
+serde_json = "1.0"
 env_logger = "0.11"
 log = "0.4"
-derive_more = "0.99"
+derive_more = "1"
 dotenv = "0.15"
 
-diesel = { version = "2.1", features = ["postgres", "r2d2", "chrono"] }
+diesel = { version = "2.2", features = ["postgres", "r2d2", "chrono"] }
 r2d2 = "0.8"
 r2d2_postgres = "0.18"
 chrono = { version = "0.4", features = ["serde"] }
 
-redis = { version = "0.25", features = ["tokio-comp"] }
+redis = { version = "0.26", features = ["tokio-comp"] }
 
 argon2 = "0.5"
 base64 = "0.22"
